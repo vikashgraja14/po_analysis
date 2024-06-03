@@ -56,10 +56,18 @@ if st.session_state.upload:
     t1, t2,t3 = st.tabs(["Overall Analysis","Yearly Analysis","Exceptions"])
     with t2:
         col1, col2, col3 = st.columns(3)  # Split the page into two columns
-        grouped_data = grouped_data.drop_duplicates(subset=['Vendor', 'year'], keep='first')
+        grouped_data = grouped_data.copy()
         selected_year = col1.selectbox('Select Year', grouped_data['year'].unique())
         filtered_data = grouped_data[grouped_data['year'] == selected_year]
-
+        filtered_data['Cost Ctr'] = filtered_data['Cost Ctr'].astype(str)
+        filtered_data['G/L'] = filtered_data['G/L'].astype(str)
+        dynamic_filters = DynamicFilters(filtered_data, filters=['Cost Ctr', 'G/L'])
+        dynamic_filters.display_filters()
+        filtered_data = dynamic_filters.filter_df()
+        filtered_data.reset_index(drop=True, inplace=True)
+        filtered_data.index = filtered_data.index + 1
+        filtered_data.rename_axis('S.NO', axis=1, inplace=True)
+        df23 = filtered_data.copy()
         # Define card styles
         card1_style = """
                      display: flex;
@@ -93,57 +101,66 @@ if st.session_state.upload:
         # Layout the cards
         c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
         with card1:
-            Total_Amount_Alloted = filtered_data['Total_Alloted_Amount/year'].iloc[0]
-            # Calculate percentage of yearly allotted amount per category
-            filtered_data['percentage_Yearly_Alloted_Amount/Category'] = (filtered_data[
-                                                                              'used_amount_crores'] / Total_Amount_Alloted) * 1000000000
+            Total_Amount_Alloted = filtered_data['Amount'].sum() # Assuming filtered_data is defined
 
             st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent (in Crores)</h3>",
+                f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent </h3>",
                 unsafe_allow_html=True
             )
-            Total_alloted = Total_Amount_Alloted / 10000000
+            Total_alloted = Total_Amount_Alloted
             st.markdown(
                 f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f}crores</h2>"
+                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f}</h2>"
                 "</div>",
                 unsafe_allow_html=True
             )
-            st.write("")
+            # st.write("")
+            amount_length = filtered_data.groupby('year')['Amount'].sum().reset_index(name='amount_length')
+
+
             st.write(
-                "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Amount Spent In Crores-Category</h2>",
+                "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Amount Spent -Category</h2>",
                 unsafe_allow_html=True)
-            plt.figure(figsize=(8, 5), facecolor='none')  # Adjust figure size
-            bars = sns.barplot(x=filtered_data['category'],
-                               y=filtered_data['used_amount_crores'],
-                               color='darkblue', edgecolor='none', saturation=0.55,
-                               width=0.4)  # Set bar color and remove borders
+            category_amount = filtered_data.groupby('category')['Amount'].sum().reset_index()
+            category_amount['Amount'] = category_amount['Amount'] / 10000000
+            fig = px.bar(category_amount, x='category', y='Amount', color='category',
+                         labels={'Amount': 'Amount (in Crores)'}, title='Amount Spent In Crores by Category',
+                         width=400, height=525, template='plotly_white')
 
-            plt.xlabel('Category', fontsize=14, fontweight='bold', color='black')  # Customize x-axis label
-            plt.ylabel('Amount', fontsize=14, fontweight='bold',
-                       color='black')  # Customize y-axis label
-            plt.xticks(fontsize=12, fontweight='bold', color='black')  # Rotate x-axis labels and adjust font size
-            plt.yticks(fontsize=12, fontweight='bold', color='black')
-            plt.tight_layout()
+            # Add text labels on top of the bars with formatting in crores
+            fig.update_traces(texttemplate='%{y:.2f} Cr', textposition='outside')
 
-            # Adding value labels on top of bars
-            # Adding value labels inside the bars for amount
-            for bar in bars.patches:
-                height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width() / 2, height, f'{height:.2f}', ha='center', va='bottom',
-                         fontsize=14)
-            plt.grid(True)  # Remove gridlines
+            num_bars = len(category_amount)
 
-            # Show only the x and y-axis
-            plt.gca().spines['left'].set_visible(False)
-            plt.gca().spines['top'].set_visible(False)  # Hide top spine
-            plt.gca().spines['right'].set_visible(False)  # Hide right spine
+            # Set the bargap based on the number of bars
+            if num_bars == 1:
+                bargap_value = 0.8
+            elif num_bars == 4:
+                bargap_value = 0.3
+            elif num_bars == 2:
+                bargap_value = 0.7
+            elif num_bars == 3:
+                bargap_value = 0.55
+            else:
+                # Default value (you can adjust this as needed)
+                bargap_value = 0.55
 
-            # Show plot in Streamlit
-            st.pyplot(plt)
+            # Customize the layout
+            fig.update_layout(
+                xaxis_title='Category',
+                yaxis_title='Amount (in Crores)',
+                font=dict(size=14, color='black'),
+                showlegend=False,
+                bargap=bargap_value
+            )
+
+            # Show the plot in Streamlit
+            st.plotly_chart(fig)
+
+
 
         with card2:
-            Total_Transaction = filtered_data['overall_transactions/year'].iloc[0]
+            Total_Transaction = df23['Amount'].count()  # Assuming filtered_data is defined
             st.markdown(
                 f"<h3 style='text-align: center; font-size: 25px;'>Total Count Of Transactions</h3>",
                 unsafe_allow_html=True
@@ -154,61 +171,59 @@ if st.session_state.upload:
                 "</div>",
                 unsafe_allow_html=True
             )
-            st.write("")
             st.write(
                 "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Transaction Count-Category</h2>",
                 unsafe_allow_html=True)
-            plt.figure(figsize=(8, 5), facecolor='none')
-            bars = sns.barplot(x=filtered_data['category'],
-                               y=filtered_data['used_amount_crores'],
-                               color='darkblue', edgecolor='none', saturation=0.55,
-                               width=0.4)
-
-            plt.xlabel('Category', fontsize=14, fontweight='bold', color='black')  # Customize x-axis label
-            plt.ylabel('Transactions ', fontsize=14, fontweight='bold',
-                       color='black')  # Customize y-axis label
-            plt.xticks(fontsize=12, fontweight='bold', color='black')  # Rotate x-axis labels and adjust font size
-            plt.yticks(fontsize=12, fontweight='bold', color='black')  # Adjust font size of y-axis labels
-            plt.tight_layout()
-
-            # Remove gridlines
-            plt.grid(True)
-
-            # Adding value labels on top of bars
-            plt.figure(figsize=(8, 5))
-            bars = sns.barplot(x=filtered_data['category'], y=filtered_data['overall_transactions/category/year'],
-                               color='darkblue', edgecolor='none',
-                               saturation=0.55, width=0.4)  # Adjust saturation for darker color
-
-            plt.xlabel('Category', fontsize=12, fontweight='bold', color='black')  # Customize x-axis label
-            plt.ylabel('Transactions ', fontsize=12, fontweight='bold',
-                       color='black')  # Customize y-axis label
-            plt.xticks(fontsize=12, fontweight='bold', color='black')  # Rotate x-axis labels and adjust font size
-            plt.yticks(fontsize=12, fontweight='bold', color='black')  # Adjust font size of y-axis labels
-            plt.tight_layout()
-
-            # Remove gridlines
-            plt.grid(True)
-
-            # Adding value labels on top of bars
-            for bar in bars.patches:
-                height = bar.get_height()
-                # Convert height to an integer
-                height_int = int(height)
-                # Display the integer value without decimal points
-                plt.text(bar.get_x() + bar.get_width() / 2, height, f'{height_int}', ha='center', va='bottom',
-                         fontsize=14)
-            plt.gca().spines['left'].set_visible(False)
-            plt.gca().spines['top'].set_visible(False)  # Hide top spine
-            plt.gca().spines['right'].set_visible(False)  # Hide right spine
-
-            # Adjust space between bars
-
-            # Show plot in Streamlit
-            st.pyplot(plt)
             st.write("")
+            category_amount = filtered_data.groupby('category')['Amount'].count().reset_index()
+
+            fig = px.bar(category_amount, x='category', y='Amount', color='category',
+                         labels={'Amount': 'Transactions'}, title='Transaction Count by Category',
+                         width=400, height=500, template='plotly_white')
+
+            # Add text annotations for each bar
+            for trace in fig.data:
+                for i, value in enumerate(trace.y):
+                    fig.add_annotation(
+                        x=trace.x[i],
+                        y=value,
+                        text=f"{value}",
+                        showarrow=True,
+                        font=dict(size=12, color='black'),
+                        align='center',
+                        yshift=5
+                    )
+
+            # Determine the number of bars
+            num_bars = len(category_amount)
+
+            # Set the bargap based on the number of bars
+            if num_bars == 1:
+                bargap_value = 0.8
+            elif num_bars == 4:
+                bargap_value = 0.3
+            elif num_bars == 2:
+                bargap_value = 0.7
+            elif num_bars == 3:
+                bargap_value = 0.55
+            else:
+                # Default value (you can adjust this as needed)
+                bargap_value = 0.55
+
+            # Customize the layout
+            fig.update_layout(
+                annotations=[dict(showarrow=False)],
+                margin=dict(l=20, r=20, t=40, b=20),
+                showlegend=False,
+                xaxis_title='Category',
+                yaxis_title='Amount (in Crores)',
+                font=dict(size=14, color='black'),
+                bargap=bargap_value
+            )
+            # Show the plot in Streamlit
+            st.plotly_chart(fig)
             st.write("")
-        unique_categories = grouped_data['category'].unique()
+        unique_categories = filtered_data['category'].unique()
         unique_categories = sorted(unique_categories, key=len, reverse=True)
         preferred_order = ['Vendor', 'Employee', 'Korean Expats', 'Others']
 
@@ -230,16 +245,17 @@ if st.session_state.upload:
         selected_category = col1.selectbox("Select Category or Option:", unique_categories_with_options)
 
         # Get all unique values in the 'Cost Ctr' column
-        all_cost_ctrs = grouped_data['Cost Ctr'].unique()
+        all_cost_ctrs = filtered_data['Cost Ctr'].unique()
 
         # Set selected_cost_ctr to represent all values in the 'Cost Ctr' column
         selected_cost_ctr = 'All'  # or all_cost_ctrs if you want the default to be all values
 
         # Filter the data based on the selected year and dropdown selections
-        filtered_data = grouped_data[grouped_data['year'] == selected_year]
-        filtered_data = filtered_data.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-        df = grouped_data[grouped_data['year'] == selected_year]
-        filtered_transactions = grouped_data[grouped_data['year'] == selected_year]
+        filtered_data = filtered_data[filtered_data['year'] == selected_year]
+        # filtered_data = filtered_data.drop_duplicates(subset=['Vendor', 'year'], keep='first')
+        df = filtered_data[filtered_data['year'] == selected_year]
+        filtered_transactions = filtered_data[filtered_data['year'] == selected_year]
+        # filtered_transactions = filtered_transactions.drop_duplicates(subset=['Vendor', 'year'], keep='first')
 
         if selected_category != 'All':
             if selected_category == f'Top 25 {Cost_Ctr} Transactions':
@@ -270,6 +286,15 @@ if st.session_state.upload:
 
 
             elif selected_category == f'Top 25 {G_L} Transactions':
+
+                filtered_data['Cumulative_Alloted/G/L'] = filtered_data.groupby(['G/L'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/G/L/Year'] = filtered_data.groupby(['G/L', 'year'])['Amount'].transform('sum')
+                filtered_data['Percentage_Cumulative_Alloted/G/L'] = (filtered_data['Cumulative_Alloted/G/L'] / filtered_data[
+                    'cumulative_Alloted_Amount']) * 100
+                yearly_total2 = filtered_data.groupby('year')['Amount'].sum().reset_index()
+                yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year2'}, inplace=True)
+                filtered_data['Percentage_Cumulative_Alloted/G/L/Year'] = (filtered_data['Cumulative_Alloted/G/L/Year'] / filtered_data[
+                    'Total_Alloted_Amount/year2']) * 100
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/G/L/Year', ascending=False)[
                     ['G/L', 'G/L Name',
                      'Cumulative_Alloted/G/L/Year',
@@ -280,7 +305,11 @@ if st.session_state.upload:
                 filtered_data.reset_index(drop=True, inplace=True)
                 filtered_data.index = filtered_data.index + 1
                 filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
+                filtered_transactions['Cummulative_transactions2'] = len(filtered_transactions)
+                filtered_transactions['Cumulative_transactions/G/L'] = filtered_transactions.groupby(['G/L'])['G/L'].transform('count')
+                filtered_transactions['Cumulative_transactions/G/L/Year'] = filtered_transactions.groupby(['G/L'])['G/L'].transform('count')
+                filtered_transactions['percentage Transcation/G/L/year'] = filtered_transactions['Cumulative_transactions/G/L/Year'] / filtered_transactions[
+                    'Cummulative_transactions2'] * 100
                 filtered_transactions = filtered_transactions.sort_values(by='percentage Transcation/G/L/year',
                                                                           ascending=False)[['G/L', 'G/L Name',
                                                                                             'Cumulative_transactions/G/L/Year',
@@ -299,24 +328,36 @@ if st.session_state.upload:
             else:
                 category = ' '.join(selected_category.split()[2:-1])
                 filtered_data = filtered_data[filtered_data['category'] == category]
+                filtered_transactions = filtered_data.copy()
+                filtered_data['Amount_used/Year2'] = filtered_data.groupby(['Vendor', 'year', 'category'])['Amount'].transform('sum')
+                filtered_data['Yearly_Alloted_Amount\Category2'] = filtered_data.groupby(['category', 'year'])['Amount'].transform('sum')
+                filtered_data['percentage_of_amount/category_used/year2'] = (filtered_data['Amount_used/Year2'] / filtered_data[
+                    'Yearly_Alloted_Amount\Category2']) * 100
                 filtered_transactions = filtered_transactions[filtered_transactions['category'] == category]
-                filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year',
-                                                          ascending=False)[['Vendor','Vendor Name', 'Amount_used/Year',
-                                                                            'percentage_of_amount/category_used/year']]
-                filtered_data.rename(columns={'Amount_used/Year': 'Value (In ₹)','Vendor':'ID','Vendor Name':'Name',
-                                              'percentage_of_amount/category_used/year': '%total'},
+                filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year2',
+                                                          ascending=False)[['Vendor','Vendor Name', 'Amount_used/Year2',
+                                                                            'percentage_of_amount/category_used/year2']]
+                filtered_data = filtered_data.drop_duplicates(subset=['Vendor'], keep='first')
+                filtered_data.rename(columns={'Amount_used/Year2': 'Value (In ₹)','Vendor':'ID','Vendor Name':'Name',
+                                              'percentage_of_amount/category_used/year2': '%total'},
                                      inplace=True)
+
                 filtered_data.reset_index(drop=True, inplace=True)
                 filtered_data.index = filtered_data.index + 1
                 filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
-                filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year',
+                filtered_transactions['Transations/year/Vendor2'] = filtered_transactions.groupby(['Vendor', 'year', 'category'])['Vendor'].transform('count')
+                filtered_transactions['overall_transactions/category/year2'] = filtered_transactions.groupby(['category', 'year'])['category'].transform(
+                    'count')
+                filtered_transactions['percentransations_made/category/year2'] = (filtered_transactions['Transations/year/Vendor2'] / filtered_transactions[
+                    'overall_transactions/category/year2']) * 100
+                filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year2',
                                                                           ascending=False)[
                     ['Vendor','Vendor Name',
-                     'Transations/year/Vendor', 'percentransations_made/category/year']]
+                     'Transations/year/Vendor2', 'percentransations_made/category/year2']]
+                filtered_transactions = filtered_transactions.drop_duplicates(subset=['Vendor'], keep='first')
                 filtered_transactions.rename(columns={'Vendor':'ID','Vendor Name':'Name',
-                                                      'Transations/year/Vendor': 'Transactions',
-                                                      'percentransations_made/category/year': '% total'},
+                                                      'Transations/year/Vendor2': 'Transactions',
+                                                      'percentransations_made/category/year2': '% total'},
                                              inplace=True)
                 filtered_transactions.reset_index(drop=True, inplace=True)  # Reset index here
                 filtered_transactions.index = filtered_transactions.index + 1
@@ -405,84 +446,62 @@ if st.session_state.upload:
         data = filtered_data.copy()
         data.reset_index(drop=True, inplace=True)
         data.index += 1  # Start index from 1
-        data
+
         @st.cache_resource(show_spinner=False)
         def line_plot_overall_transactions(data, category, years, width=500, height=300):
-            # Convert years to strings
-            years = [
-
-                (year) for year in years]
-
-            # Filter data for the selected category and years
             filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
+            data_length = filtered_data.groupby('year').size().reset_index(name='data_len')
 
-            # Create a DataFrame with all years in the range
-            all_years_data = pd.DataFrame({'year': years})
-
-            # Merge with filtered_data to retain only the available data points
-            filtered_data = pd.merge(all_years_data, filtered_data, on='year', how='left')
-
-            # Interpolate missing values to create a continuous line
-            filtered_data['overall_transactions/category/year'] = filtered_data[
-                'overall_transactions/category/year'].interpolate()
-            filtered_data['year'] = filtered_data['year'].astype(str)
-
-            # Plot the line graph
-            fig = px.line(filtered_data, x='year', y='overall_transactions/category/year',
-                          title='Transactions Count',
-                          labels={'year': 'Year', 'overall_transactions/category/year': 'Transactions'},
+            # Create the line plot
+            fig = px.line(data_length, x='year', y='data_len',
+                          title='Transactions Count by Year',
+                          labels={'year': 'Year', 'data_len': 'Transactions'},
                           markers=True)
 
-            # Set mode to 'lines+markers' for all points
+            # Set mode to 'lines+markers'
             fig.update_traces(mode='lines+markers')
 
             # Update layout with width and height
             fig.update_layout(width=width, height=height)
 
-            # Remove decimal values from y-axis labels
+            # Modify x-axis labels to include hyphens between years
+            fig.update_xaxes(tickvals=years,
+                             ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
+
+            # Format y-axis ticks as integers
             fig.update_yaxes(tickformat=".0f")
 
             return fig
 
         @st.cache_resource(show_spinner=False)
-
         def line_plot_used_amount(data, category, years, width=500, height=300):
-            # Convert 'year' column to string in both dataframes
-            years = [(year) for year in years]
+            data = data[(data['category'] == category) & (data['year'].isin(years))]
 
-            # Filter data for the selected category and years
-            filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
-            filtered_data['year'] = filtered_data['year'].astype(str)
+            amount_length = data.groupby('year')['Amount'].sum().reset_index(name='amount_length')
 
-            # Create a DataFrame with all years in the range
-            all_years_data = pd.DataFrame({'year': years})
-            all_years_data['year'] = all_years_data['year'].astype(str)
-            # Merge with filtered_data to retain only the available data points
-            filtered_data = pd.merge(all_years_data, filtered_data, on='year', how='left')
-            filtered_data['year'] = filtered_data['year'].astype(str)
-            # Interpolate missing values to create a continuous line
-            filtered_data['used_amount_crores'] = filtered_data['used_amount_crores'].interpolate()
-            filtered_data['year'] = filtered_data['year'].astype(str)
-
-            # Plot the line graph
-            fig = px.line(filtered_data, x='year', y='used_amount_crores',text ='used_amount_crores',
-                          title=f'Amount Spent (in Crores)',
-                          labels={'year': 'Year', 'used_amount_crores': 'Amount'},
+            # Create the line plot
+            fig = px.line(amount_length, x='year', y='amount_length',
+                          title='Transactions Count by Year',
+                          labels={'year': 'Year', 'amount_length': 'Transaction Amount'},
                           markers=True)
 
-            # Set mode to 'lines+markers' and label the points above the markers
+            # Set mode to 'lines+markers'
             fig.update_traces(mode='lines+markers')
 
             # Update layout with width and height
             fig.update_layout(width=width, height=height)
 
+            # Modify x-axis labels to include hyphens between years
+            fig.update_xaxes(tickvals=years,
+                             ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
+
             return fig
 
+        years = (data['year'].unique())
+        years_df = pd.DataFrame({'year': data['year'].unique()})
+        filtered_years = (data['year'].unique())
+        filtered_data = (data[data['year'].isin(filtered_years)].copy())
 
-        years = (filtered_data['year'].unique().astype(str))
-        years_df = pd.DataFrame({'year': filtered_data['year'].unique()})
-        filtered_years = (filtered_data['year'].unique().astype(str))
-        filtered_data = (filtered_data[filtered_data['year'].isin(filtered_years)].copy().astype(str))
 
 
         st.write("## Employee Reimbursement Trend")
@@ -490,7 +509,7 @@ if st.session_state.upload:
 
         col1, col2= st.columns(2)
         fig_employee = line_plot_overall_transactions(data, "Employee",years_df['year'])
-        fig_employee2 = line_plot_used_amount(data, "Employee",years_df['year'])
+        fig_employee2 = line_plot_used_amount(data, "Employee", years)
         col2.plotly_chart(fig_employee)
         col1.plotly_chart(fig_employee2)
 
@@ -498,7 +517,7 @@ if st.session_state.upload:
         st.write("## Korean Expats Reimbursement Trend")
         co1, co2= st.columns(2)
         fig_korean_expats = line_plot_overall_transactions(data, "Korean Expats", years_df['year'])
-        fig_korean_expats1 = line_plot_used_amount(data, "Korean Expats", years_df['year'])
+        fig_korean_expats1 = line_plot_used_amount(data, "Korean Expats", years)
         co2.plotly_chart(fig_korean_expats)
         co1.plotly_chart(fig_korean_expats1)
 
@@ -506,7 +525,7 @@ if st.session_state.upload:
         st.write("## Vendor Payment Trend")
         c1,c2=st.columns(2)
         fig_vendor = line_plot_overall_transactions(data, "Vendor",years_df['year'])
-        fig_vendor1 = line_plot_used_amount(data, "Vendor",years_df['year'])
+        fig_vendor1 = line_plot_used_amount(data, "Vendor", years)
         c2.plotly_chart(fig_vendor)
         c1.plotly_chart(fig_vendor1)
 
@@ -514,7 +533,7 @@ if st.session_state.upload:
         st.write("## Other Payment Trend")
         cl1,cl2=st.columns(2)
         fig_others = line_plot_overall_transactions(data, "Others",years_df['year'])
-        fig_others1 = line_plot_used_amount(data, "Others",years_df['year'])
+        fig_others1 = line_plot_used_amount(data, "Others", years)
         cl2.plotly_chart(fig_others)
         cl1.plotly_chart(fig_others1)
     with t3:
@@ -541,11 +560,11 @@ if st.session_state.upload:
             # Sorting by 'Invoice Number'
             dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
             dfe[['Name','Amount','Doc. Date','Invoice Number',"ID"]] = dfe[['Name','Amount','Doc. Date','Invoice Number',"ID"]].astype(str)
-            selected_option = c2.selectbox("Select Duplicate type", ["1", "2","3"], index=0)
+            selected_option = c2.selectbox("Select Duplicate type", ["Duplicate Invoice","Same amount,id,date", "Similar amount,costctr,invoice"], index=0)
             # Filter the DataFrame based on the selected option
-            if selected_option == "1":
+            if selected_option == "Same amount,id,date":
                 dfe = dfe[dfe.duplicated(subset=['Doc. Date', 'ID', 'Amount'], keep=False)]
-            elif selected_option == "2":
+            elif selected_option == "Similar amount,costctr,invoice":
                 grouped_df = dfe.groupby(['Cost Center', 'Amount']).filter(lambda group: len(group) > 1)
 
                 # Step 4: Compare values in column 'Invoice Number'
@@ -558,11 +577,12 @@ if st.session_state.upload:
                 dfe = dfe.groupby(['Cost Center', 'Amount']).filter(lambda group: len(group) > 1)
 
                 dfe.reset_index(drop=True, inplace=True)
-            elif selected_option == "3":
+            elif selected_option == "Duplicate Invoice":
                 dfe = dfe[dfe.duplicated(subset=['Invoice Number'], keep=False)]
                 dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
             dfe.reset_index(drop=True, inplace=True)
             dfe.index += 1  # Start index from 1
+            dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
             dfe['Amount'] = pd.to_numeric(dfe['Amount'], errors='coerce')
             dfe['Amount'] = dfe['Amount'].astype(int)
             st.write(
@@ -609,6 +629,7 @@ if st.session_state.upload:
                  dfe = dfe.drop(columns=['year'])
                  dfe['Amount'] = dfe['Amount'].round()
                  dfe = dfe.sort_values(by=['Name','Amount','Doc. Date'])
+                 dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
                  dfe.reset_index(drop=True, inplace=True)
                  dfe.index += 1  # Start index from 1
                  c2.write(dfe)
@@ -848,7 +869,6 @@ if st.session_state.upload:
                 dfe = exceptions.copy()
                 dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
                 dfe = dfe[(~dfe['Created'].isna()) & (~dfe['Verified by'].isna()) & dfe['HOG Approval by'].isna()]
-
                 dfe = dfe[
                     ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
                      'Document No',
