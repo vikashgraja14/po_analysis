@@ -102,19 +102,18 @@ def process_data(files):
     df['Cumulative_Alloted/Cost Ctr/Year'] = df.groupby(['Cost Ctr','year'])['Amount'].transform('sum')
     df['Percentage_Cumulative_Alloted/Cost Ctr'] = (df['Cumulative_Alloted/Cost Ctr'] / df['cumulative_Alloted_Amount']) * 100
     df['Percentage_Cumulative_Alloted/Cost Ctr/Year'] = (df['Cumulative_Alloted/Cost Ctr/Year'] / df['Total_Alloted_Amount/year']) * 100
-    df['Cumulative_transactions/G/L'] = df.groupby(['G/L'])['G/L'].transform('count')
-    df['Cumulative_transactions/G/L/Year'] = df.groupby(['G/L', 'G/L'])['G/L'].transform('count')
-    df['Cumulative_Alloted/G/L'] = df.groupby(['G/L'])['Amount'].transform('sum')
-    df['Cumulative_Alloted/G/L/Year'] = df.groupby(['G/L', 'year'])['Amount'].transform('sum')
-    df['Percentage_Cumulative_Alloted/G/L'] = (df['Cumulative_Alloted/G/L'] / df[
-        'cumulative_Alloted_Amount']) * 100
-    df['Percentage_Cumulative_Alloted/G/L/Year'] = (df['Cumulative_Alloted/G/L/Year'] / df[
-        'Total_Alloted_Amount/year']) * 100
+    # df['Cumulative_transactions/G/L'] = df.groupby(['G/L'])['G/L'].transform('count')
+    # df['Cumulative_transactions/G/L/Year'] = df.groupby(['G/L', 'G/L'])['G/L'].transform('count')
+    # df['Cumulative_Alloted/G/L'] = df.groupby(['G/L'])['Amount'].transform('sum')
+    # df['Cumulative_Alloted/G/L/Year'] = df.groupby(['G/L', 'year'])['Amount'].transform('sum')
+    # df['Percentage_Cumulative_Alloted/G/L'] = (df['Cumulative_Alloted/G/L'] / df[
+    #     'cumulative_Alloted_Amount']) * 100
+    # df['Percentage_Cumulative_Alloted/G/L/Year'] = (df['Cumulative_Alloted/G/L/Year'] / df[
+    #     'Total_Alloted_Amount/year']) * 100
     df['used_amount_crores'] = (df['Yearly_Alloted_Amount\Category']/10000000)
     df['percentage Transcation/costctr/year'] =df['Cumulative_transactions/Cost Ctr/Year'] /df['Cummulative_transactions']*100
-    df['percentage Transcation/G/L/year'] = df['Cumulative_transactions/G/L/Year'] / df[
-        'Cummulative_transactions'] * 100
-    df = df.drop_duplicates(subset=['Vendor', 'year'], keep='first')
+    # df['percentage Transcation/G/L/year'] = df['Cumulative_transactions/G/L/Year'] / df[
+    #     'Cummulative_transactions'] * 100
     df.reset_index(drop=True, inplace=True)
     df['Vendor'] = df['Vendor'].astype(str)
     df['G/L'] = df['G/L'].astype(str)
@@ -122,5 +121,4 @@ def process_data(files):
     df['G/L'] = df['G/L'].apply(lambda x: re.sub(r'\..*', '', x))
     df = df.sort_values(by='percentage_of_amount/category_used/year', ascending=False)
     df.reset_index(drop=True, inplace=True)
-    df.to_excel("analysis_result.xlsx", index=False)
     return df
