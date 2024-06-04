@@ -1,7 +1,5 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 from analyze_excel import process_data
-import seaborn as sns
 import re
 import base64
 from io import BytesIO
@@ -50,12 +48,21 @@ if files:
 
 if st.session_state.upload:
     # Process only the first file from the list
-    grouped_data = process_data(files[0])
+    if len(files) == 1:
+        grouped_data = process_data(files[0])
+    else:
+        # Process each file and concatenate the dataframes
+        all_data = []
+        for file in files:
+            all_data.append(process_data(file))
+        grouped_data = pd.concat(all_data)
+
+    # Create copies of the data
     data = grouped_data.copy()
-    exceptions= grouped_data.copy()
+    exceptions = grouped_data.copy()
     t1, t2,t3 = st.tabs(["Overall Analysis","Yearly Analysis","Exceptions"])
     with t2:
-        col1, col2, col3 = st.columns(3)  # Split the page into two columns
+        col1, col2, col3,col4 = st.columns(4)  # Split the page into two columns
         grouped_data = grouped_data.copy()
         selected_year = col1.selectbox('Select Year', grouped_data['year'].unique())
         filtered_data = grouped_data[grouped_data['year'] == selected_year]
@@ -68,6 +75,7 @@ if st.session_state.upload:
         filtered_data.index = filtered_data.index + 1
         filtered_data.rename_axis('S.NO', axis=1, inplace=True)
         df23 = filtered_data.copy()
+
         # Define card styles
         card1_style = """
                      display: flex;
@@ -259,6 +267,7 @@ if st.session_state.upload:
 
         if selected_category != 'All':
             if selected_category == f'Top 25 {Cost_Ctr} Transactions':
+
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/Cost Ctr/Year', ascending=False)[
                     ['Cost Ctr', 'CostctrName',
                      'Cumulative_Alloted/Cost Ctr/Year',
@@ -292,9 +301,9 @@ if st.session_state.upload:
                 filtered_data['Percentage_Cumulative_Alloted/G/L'] = (filtered_data['Cumulative_Alloted/G/L'] / filtered_data[
                     'cumulative_Alloted_Amount']) * 100
                 yearly_total2 = filtered_data.groupby('year')['Amount'].sum().reset_index()
-                yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year2'}, inplace=True)
+                yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year'}, inplace=True)
                 filtered_data['Percentage_Cumulative_Alloted/G/L/Year'] = (filtered_data['Cumulative_Alloted/G/L/Year'] / filtered_data[
-                    'Total_Alloted_Amount/year2']) * 100
+                    'Total_Alloted_Amount/year']) * 100
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/G/L/Year', ascending=False)[
                     ['G/L', 'G/L Name',
                      'Cumulative_Alloted/G/L/Year',
@@ -364,24 +373,41 @@ if st.session_state.upload:
                 filtered_transactions.rename_axis('S.NO', axis=1, inplace=True)
                 merged_df = pd.merge(filtered_data, filtered_transactions, on=['ID', 'Name'])
         else:
-            filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year', ascending=False)[
-                ['Vendor','Vendor Name', 'Amount_used/Year', 'percentage_of_amount/category_used/year'
-                 ]]
-            filtered_data.rename(columns={'Amount_used/Year': 'Value (In ₹)','Vendor':'ID','Vendor Name':'Name',
-                                          'percentage_of_amount/category_used/year': '% of total',
-                                          },
+            filtered_data['Amount_used/Year2'] = filtered_data.groupby(['Vendor', 'year'])[
+                'Amount'].transform('sum')
+            filtered_data['Yearly_Alloted_Amount\Category2'] = filtered_data.groupby(['year'])['Amount'].transform('sum')
+            filtered_data['percentage_of_amount/category_used/year2'] = (filtered_data['Amount_used/Year2'] /
+                                                                         filtered_data[
+                                                                             'Yearly_Alloted_Amount\Category2']) * 100
+            filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year2',
+                                                      ascending=False)[['Vendor', 'Vendor Name', 'Amount_used/Year2',
+                                                                        'percentage_of_amount/category_used/year2']]
+            filtered_data = filtered_data.drop_duplicates(subset=['Vendor'], keep='first')
+            filtered_data.rename(columns={'Amount_used/Year2': 'Value (In ₹)', 'Vendor': 'ID', 'Vendor Name': 'Name',
+                                          'percentage_of_amount/category_used/year2': '%total'},
                                  inplace=True)
+
             filtered_data.reset_index(drop=True, inplace=True)
             filtered_data.index = filtered_data.index + 1
             filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
-            filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year',
+            filtered_transactions['Transations/year/Vendor2'] = \
+            filtered_transactions.groupby(['Vendor', 'year'])['Vendor'].transform('count')
+            filtered_transactions['overall_transactions/category/year2'] = \
+            filtered_transactions['overall_transactions/category/year2'] = \
+            filtered_transactions.groupby(['year'])['category'].transform(
+                'count')
+            filtered_transactions['percentransations_made/category/year2'] = (filtered_transactions[
+                                                                                  'Transations/year/Vendor2'] /
+                                                                              filtered_transactions[
+                                                                                  'overall_transactions/category/year2']) * 100
+            filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year2',
                                                                       ascending=False)[
-                ['Vendor','Vendor Name',
-                 'Transations/year/Vendor','percentransations_made/category/year']]
+                ['Vendor', 'Vendor Name',
+                 'Transations/year/Vendor2', 'percentransations_made/category/year2']]
+            filtered_transactions = filtered_transactions.drop_duplicates(subset=['Vendor'], keep='first')
             filtered_transactions.rename(columns={'Vendor':'ID','Vendor Name':'Name',
-                                                  'Transations/year/Vendor': 'Transactions',
-                                                  'percentransations_made/category/year': '% total'},
+                                                  'Transations/year/Vendor2': 'Transactions',
+                                                  'percentransations_made/category/year2': '% total'},
                                          inplace=True)
             filtered_transactions.reset_index(drop=True, inplace=True)  # Reset index here
             filtered_transactions.index = filtered_transactions.index + 1
@@ -414,6 +440,7 @@ if st.session_state.upload:
         dynamic_filters = DynamicFilters(filtered_df, filters=['Cost Ctr', 'G/L'])
         dynamic_filters.display_filters()
         filtered_data = dynamic_filters.filter_df()
+        # filtered_data = filtered_df.copy()
         card1, card2 = st.columns(2)
         with card1:
             Total_Amount_Alloted = filtered_data['Amount'].sum() # Assuming filtered_data is defined
@@ -447,6 +474,7 @@ if st.session_state.upload:
         data.reset_index(drop=True, inplace=True)
         data.index += 1  # Start index from 1
 
+
         @st.cache_resource(show_spinner=False)
         def line_plot_overall_transactions(data, category, years, width=500, height=300):
             filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
@@ -471,7 +499,21 @@ if st.session_state.upload:
             # Format y-axis ticks as integers
             fig.update_yaxes(tickformat=".0f")
 
+            # Add text annotations to data points
+            for year, count in zip(data_length['year'], data_length['data_len']):
+
+                fig.add_annotation(
+                    x=year,
+                    y=count,
+                    text=str(count),
+                    showarrow=False,
+                    font=dict(size=12, color='black'),
+                    align='center',
+                    yshift=5
+                )
+
             return fig
+
 
         @st.cache_resource(show_spinner=False)
         def line_plot_used_amount(data, category, years, width=500, height=300):
@@ -495,8 +537,19 @@ if st.session_state.upload:
             fig.update_xaxes(tickvals=years,
                              ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
 
-            return fig
+            # Add titles on top of data points (annotations)
+            for year, amount in zip(amount_length['year'], amount_length['amount_length']):
+                fig.add_annotation(
+                    x=year,
+                    y=amount,
+                    text=f"{amount:.2f}",
+                    showarrow=False,
+                    font=dict(size=12, color='black'),
+                    align='center',
+                    yshift=5
+                )
 
+            return fig
         years = (data['year'].unique())
         years_df = pd.DataFrame({'year': data['year'].unique()})
         filtered_years = (data['year'].unique())
@@ -1105,8 +1158,216 @@ if st.session_state.upload:
                     # Download link for Excel file within a Markdown
                     download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same Creator ID And Verified ID.xlsx">Download Excel file</a>'
                     st.markdown(download_link, unsafe_allow_html=True)
+
+
+        def all_sundays(year):
+            return pd.date_range(start=str(year), end=str(year + 1), freq='W-SUN')
+
+
+        # Create an empty DataFrame
+        df = pd.DataFrame(columns=['date', 'type'])
+
+        # Loop through years from 2020 to 2025
+        for year in range(2020, 2026):
+            sundays = all_sundays(year)
+            sunday_df = pd.DataFrame({'date': sundays.strftime('%Y/%m/%d'), 'type': 'sunday'})
+
+            # Add rows for specific dates and types
+            gandhi_jayanti = pd.DataFrame({'date': [f'{year}/10/02'], 'type': ['gandhi_jayanti']})
+            republic_day = pd.DataFrame({'date': [f'{year}/01/26'], 'type': ['republic_day']})
+            independence_day = pd.DataFrame({'date': [f'{year}/08/15'], 'type': ['independence_day']})
+            may_day = pd.DataFrame({'date': [f'{year}/05/01'], 'type': ['may_day']})
+
+            df = pd.concat([df, sunday_df, gandhi_jayanti, republic_day, independence_day, may_day], ignore_index=True)
+
+
+        def Approval_holidays(exceptions):
+            dfe = exceptions.copy()
+            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
+            dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
+            dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
+            dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
+            df['date'] = pd.to_datetime(df['date'], format='%Y/%m/%d', errors='coerce')
+            # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+            dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
+            # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
+            # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
+            dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
+            dfe['Doc. Date'] = dfe['Doc. Date'].dt.date
+            dfe['Verified on'] = dfe['Verified on'].dt.date
+
+            dfe = dfe[
+                    ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
+                     'Document No','Verified on',
+                     'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
+            dfe['Document No'] = dfe['Document No'].astype(str)
+            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
+            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
+            dfe.rename(
+                    columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
+                             'Created': 'Created by'},
+                    inplace=True)
+            c1, c2, c3, c4 = st.columns(4)
+            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
+            selected_option = c1.selectbox("Select an Year", options, index=0)
+            # Filter the DataFrame based on the selected option
+            if selected_option == "All":
+                dfe = dfe  # Return the entire DataFrame
+
+
+            else:
+                dfe = dfe[dfe['year'] == selected_option]
+            dfe.reset_index(drop=True, inplace=True)
+            dfe.index += 1  # Start index from 1
+
+            st.write(
+                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES MADE ON HOLIDAYS</h2>",
+                unsafe_allow_html=True)
+            st.write("")
+            if dfe.empty:
+                st.write(
+                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries made on holidays</div>",
+                    unsafe_allow_html=True)
+            else:
+
+                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
+                with card1:
+                    Total_Amount_Alloted = dfe['Amount'].sum()
+                    # Calculate percentage of yearly allotted amount per category
+
+                    st.markdown(
+                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
+                        unsafe_allow_html=True
+                    )
+                    Total_alloted = Total_Amount_Alloted
+                    st.markdown(
+                        f"<div style='{card1_style}'>"
+                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+                with card2:
+                    Total_Transaction = len(dfe)
+                    st.markdown(
+                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f"<div style='{card2_style}'>"
+                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+                c11, c22, c33 = st.columns([1, 8, 1])
+                # Display the DataFrame
+                dfe['Amount'] = dfe['Amount'].round()
+                dfe = dfe.drop(columns=['year'])
+                c22.write(dfe)
+                excel_buffer = BytesIO()
+                dfe.to_excel(excel_buffer, index=False)
+                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
+                # Convert Excel buffer to base64
+                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
+                # Download link for Excel file within a Markdown
+                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Approval On Holidays.xlsx">Download Excel file</a>'
+                st.markdown(download_link, unsafe_allow_html=True)
+        def Pstingverified_holidays(exceptions):
+            dfe = exceptions.copy()
+            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
+            dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
+            dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
+            dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
+            df['date'] = pd.to_datetime(df['date'], format='%Y/%m/%d', errors='coerce')
+            # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+            dfe = dfe[(dfe['Pstng Date'] == dfe['Verified on']) & dfe['Pstng Date'].isin(df['date'])]
+
+            # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
+            # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
+            dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
+            dfe['Doc. Date'] = dfe['Doc. Date'].dt.date
+            dfe['Verified on'] = dfe['Verified on'].dt.date
+
+            dfe = dfe[
+                    ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
+                     'Document No','Verified on',
+                     'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
+            dfe['Document No'] = dfe['Document No'].astype(str)
+            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
+            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
+            dfe.rename(
+                    columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
+                             'Created': 'Created by'},
+                    inplace=True)
+            c1, c2, c3, c4 = st.columns(4)
+            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
+            selected_option = c1.selectbox("Select an Year", options, index=0)
+            # Filter the DataFrame based on the selected option
+            if selected_option == "All":
+                dfe = dfe  # Return the entire DataFrame
+
+
+            else:
+                dfe = dfe[dfe['year'] == selected_option]
+            dfe.reset_index(drop=True, inplace=True)
+            dfe.index += 1  # Start index from 1
+
+            st.write(
+                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES MADE ON HOLIDAYS</h2>",
+                unsafe_allow_html=True)
+            st.write("")
+            if dfe.empty:
+                st.write(
+                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries made on holidays</div>",
+                    unsafe_allow_html=True)
+            else:
+
+                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
+                with card1:
+                    Total_Amount_Alloted = dfe['Amount'].sum()
+                    # Calculate percentage of yearly allotted amount per category
+
+                    st.markdown(
+                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
+                        unsafe_allow_html=True
+                    )
+                    Total_alloted = Total_Amount_Alloted
+                    st.markdown(
+                        f"<div style='{card1_style}'>"
+                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+                with card2:
+                    Total_Transaction = len(dfe)
+                    st.markdown(
+                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f"<div style='{card2_style}'>"
+                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+                c11, c22, c33 = st.columns([1, 8, 1])
+                # Display the DataFrame
+                dfe['Amount'] = dfe['Amount'].round()
+                dfe = dfe.drop(columns=['year'])
+                c22.write(dfe)
+                excel_buffer = BytesIO()
+                dfe.to_excel(excel_buffer, index=False)
+                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
+                # Convert Excel buffer to base64
+                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
+                # Download link for Excel file within a Markdown
+                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Posting&verified On Holidays.xlsx">Download Excel file</a>'
+                st.markdown(download_link, unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
-        option = c1.selectbox("Select an option", ["Duplicate Invoices","No HOG Approval","Same Creator and Verified ID","Same Creator and HOG ID","Same Creator,Verified and HOG ID","Same Creator, Verified and NO HOG Approval"],
+        option = c1.selectbox("Select an option", ["Duplicate Invoices","No HOG Approval","Same Creator and Verified ID","Same Creator and HOG ID","Same Creator,Verified and HOG ID","Same Creator, Verified and NO HOG Approval","Posting on holidays","Posting and Verified During Holidays"],
                                       index=0)
         if option == "Duplicate Invoices":
             display_duplicate_invoices(exceptions)
@@ -1120,3 +1381,7 @@ if st.session_state.upload:
             same_Creator_Verified(exceptions)
         elif option == "Same Creator and HOG ID":
             Creator_HOG(exceptions)
+        elif option == "Posting on holidays":
+            Approval_holidays(exceptions)
+        elif option == "Posting and Verified During Holidays":
+            Pstingverified_holidays(exceptions)
