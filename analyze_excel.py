@@ -2,17 +2,18 @@ import pandas as pd
 import streamlit as st
 import os
 import re
+import numpy as np
 directory = os.path.dirname(__file__)
 os.chdir(directory)
+
 @st.cache_resource(show_spinner=False)
-# Function to concatenate and aggregate data
 def process_data(files):
     data = pd.read_excel(files)
     df1 = pd.read_excel(
-        r"C:\Users\xhmiaud03\Desktop\INTERNS\Srija\RedFlags\18-03 to 26-03-2024\General Activity cars\GACars\PO Analysis\Cost Center.xlsx",
+        "Cost Center.xlsx",
         header=1)
     df2 = pd.read_excel(
-        r"C:\Users\xhmiaud03\Desktop\INTERNS\Srija\RedFlags\18-03 to 26-03-2024\General Activity cars\GACars\PO Analysis\GL Master_.xlsx",
+        "GL Master_.xlsx",
         header=1)
     df = data.copy()
     dfcost = df1.copy()
@@ -26,6 +27,14 @@ def process_data(files):
     mapping = dict(zip(dfcost['Cost Ctr'], dfcost['CostctrName']))
     df['CostctrName'] = df['Cost Ctr'].map(mapping)
     df = df[df['Status of Request'] == 'ALL APPROVALS ARE DONE']
+    df['Clearing doc no.'].replace('', np.nan, inplace=True)
+    #
+    # # Drop rows with NaN in 'height' column
+    df.dropna(subset=['Clearing doc no.'], inplace=True)
+    #
+    # # df = df[df['Clearing doc no.'] != '']
+    # df = df[df['Clearing doc no.'].apply(lambda x: len(str(x)) > 1)]
+
     filtered_df = df
     filtered_df.reset_index(drop=True, inplace=True)
     filtered_df.index += 1
