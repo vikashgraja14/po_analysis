@@ -1,23 +1,48 @@
-import streamlit as st
-from analyze_excel import process_data,directory
-import re
-import base64
-from io import BytesIO
-import pandas as pd
-import plotly.express as px
 from streamlit_dynamic_filters import DynamicFilters
-@st.cache_resource(show_spinner=False)
+from functions import *
+import streamlit.components.v1 as components
+card1_style = """
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+             align-items: center;
+             background-color: #ffffff;
+             padding: 10px;
+             border-radius: 10px;
+             font-style: bold:
+             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+             max-width: 200px; /* Adjust the max-width as needed */
+             margin-left: 50px; /* Set left margin to auto */
+             # margin-right: auto; /* Set right margin to auto */
+         """
+card2_style = """
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+             align-items: center;
+             background-color: #ffffff;
+             padding: 10px;
+             border-radius: 10px;
+             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+             max-width: 200px; /* Adjust the max-width as needed */
+             margin-left: 50px; /* Set left margin to auto */
+             # margin-right: auto; /* Set right margin to auto */
+         """
+
+
 def on_upload_click():
     """
     Callback function for the upload button click event.
     """
     st.session_state.upload = True
-@st.cache_resource(show_spinner=False)
+
+
 def on_analyse_click():
     """
     Callback function for the analyse button click event.
     """
     st.session_state.analyse = True
+
 
 # Initialize session state keys
 if 'upload' not in st.session_state:
@@ -28,7 +53,8 @@ if 'analyse' not in st.session_state:
     st.session_state.analyse = False
 
 st.set_page_config(layout="wide")
-st.markdown("<h1 style='text-align: center; color: black;'><b>NON PO PAYMENT ANALYSIS </b></h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: black;'><b>NON PO PAYMENT ANALYSIS </b></h1>",
+            unsafe_allow_html=True)
 with st.expander("Upload Excel Files", expanded=False):
     with st.form("my_form"):
         # File Uploader
@@ -57,12 +83,15 @@ if st.session_state.upload:
         grouped_data = pd.concat(all_data)
 
     # Create copies of the data
+    radio = grouped_data.copy()
     data = grouped_data.copy()
+
+
     exceptions = grouped_data.copy()
     exceptions2 = grouped_data.copy()
-    t1, t2,t3 = st.tabs(["Overall Analysis","Yearly Analysis","Exceptions"])
+    t1, t2, t3, t4= st.tabs(["Overall Analysis", "Yearly Analysis", "Exceptions","Radio Button"])
     with t2:
-        col1, col2, col3,col4 = st.columns(4)  # Split the page into two columns
+        col1, col2, col3, col4 = st.columns(4)  # Split the page into two columns
         grouped_data = grouped_data.copy()
         selected_year = col1.selectbox('Select Year', grouped_data['year'].unique())
         filtered_data = grouped_data[grouped_data['year'] == selected_year]
@@ -76,7 +105,7 @@ if st.session_state.upload:
         filtered_data['Cost Ctr'] = filtered_data['Cost Ctr'].astype(str)
         filtered_data['G/L'] = filtered_data['G/L'].astype(str)
         filtered_data['Vendor'] = filtered_data['Vendor'].astype(str)
-        dynamic_filters = DynamicFilters(filtered_data, filters=['Cost Ctr', 'G/L','Vendor'])
+        dynamic_filters = DynamicFilters(filtered_data, filters=['Cost Ctr', 'G/L', 'Vendor'])
         dynamic_filters.display_filters(location='columns', num_columns=4, gap='large')
         filtered_data = dynamic_filters.filter_df()
         filtered_data.reset_index(drop=True, inplace=True)
@@ -85,111 +114,93 @@ if st.session_state.upload:
         for col in ['Cost Ctr', 'G/L', 'Vendor']:
             filtered_data[col] = filtered_data[col].str.split('-').str[0]
         df23 = filtered_data.copy()
-        # Define card styles
-        card1_style = """
-                     display: flex;
-                     flex-direction: column;
-                     justify-content: center;
-                     align-items: center;
-                     background-color: #ffffff;
-                     padding: 10px;
-                     border-radius: 10px;
-                     font-style: bold:
-                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                     max-width: 200px; /* Adjust the max-width as needed */
-                     margin-left: 50px; /* Set left margin to auto */
-                     # margin-right: auto; /* Set right margin to auto */
-                 """
-        card2_style = """
-                     display: flex;
-                     flex-direction: column;
-                     justify-content: center;
-                     align-items: center;
-                     background-color: #ffffff;
-                     padding: 10px;
-                     border-radius: 10px;
-                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                     max-width: 200px; /* Adjust the max-width as needed */
-                     margin-left: 50px; /* Set left margin to auto */
-                     # margin-right: auto; /* Set right margin to auto */
-                 """
-
-        # Layout the cards
         c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
-
         with card1:
-            Total_Amount_Alloted = filtered_data['Amount'].sum()
+                Total_Amount_Alloted = filtered_data['Amount'].sum()
 
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
+                # Check if the length of Total_Amount_Alloted is greater than 5
+                if len(str(Total_Amount_Alloted)) > 5:
+                    # Get the integer part of the total amount
+                    integer_part = int(Total_Amount_Alloted)
+                    # Calculate the length of the integer part
+                    integer_length = len(str(integer_part))
 
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
+                    # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
+                    if integer_length > 5 and integer_length <= 7:
+                        Total_Amount_Alloted /= 100000
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
+                    # Divide by 1 crore if the integer length is greater than 7
+                    elif integer_length > 7:
+                        Total_Amount_Alloted /= 10000000
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
+                    else:
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
                 else:
                     amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
 
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent </h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
+                # Display the total amount spent
+                st.markdown(
+                    f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent </h3>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f"<div style='{card1_style}'>"
+                    f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
 
-            st.write(
-                "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Amount Spent -Category</h2>",
-                unsafe_allow_html=True)
-            category_amount = filtered_data.groupby('category')['Amount'].sum().reset_index()
-            category_amount['Amount'] = category_amount['Amount'] / 10000000
-            fig = px.bar(category_amount, x='category', y='Amount', color='category',
-                         labels={'Amount': 'Amount (in Crores)'}, title='Amount Spent In Crores by Category',
-                         width=400, height=525, template='plotly_white')
+                st.write(
+                    "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Amount Spent -Category</h2>",
+                    unsafe_allow_html=True)
 
-            # Add text labels on top of the bars with formatting in crores
-            fig.update_traces(texttemplate='%{y:.2f} Cr', textposition='outside')
+                # Assuming 'filtered_data' is a DataFrame that has been defined earlier
+                category_amount = filtered_data.groupby('category')['Amount'].sum().reset_index()
 
-            num_bars = len(category_amount)
+                fig = px.bar(category_amount, x='category', y='Amount', color='category',
+                             labels={'Amount': 'Amount (in Crores)'}, title='Amount Spent In Crores by Category',
+                             width=400, height=525, template='plotly_white')
 
-            # Set the bargap based on the number of bars
-            if num_bars == 1:
-                bargap_value = 0.8
-            elif num_bars == 4:
-                bargap_value = 0.3
-            elif num_bars == 2:
-                bargap_value = 0.7
-            elif num_bars == 3:
-                bargap_value = 0.55
-            else:
-                # Default value (you can adjust this as needed)
-                bargap_value = 0.55
 
-            # Customize the layout
-            fig.update_layout(
-                xaxis_title='Category',
-                yaxis_title='Amount (in Crores)',
-                font=dict(size=14, color='black'),
-                showlegend=False,
-                bargap=bargap_value
-            )
+                def format_amount(amount):
+                    integer_part = int(amount)
+                    integer_length = len(str(integer_part))
+                    if integer_length > 5 and integer_length <= 7:
+                        return f"₹ {amount / 100000:,.2f} lks"
+                    elif integer_length > 7:
+                        return f"₹ {amount / 10000000:,.2f} crs"
+                    else:
+                        return f"₹ {amount:,.2f}"
 
-            # Show the plot in Streamlit
-            st.plotly_chart(fig)
+
+                fig.update_traces(texttemplate='%{customdata}', textposition='outside')
+
+                # Add a loop to iterate over each trace and update its 'customdata' with the correct amount
+                for i, amount in enumerate(category_amount['Amount']):
+                    fig.data[i].customdata = [format_amount(amount)]
+
+                num_bars = len(category_amount)
+
+                if num_bars == 1:
+                    bargap_value = 0.8
+                elif num_bars == 4:
+                    bargap_value = 0.3
+                elif num_bars == 2:
+                    bargap_value = 0.7
+                elif num_bars == 3:
+                    bargap_value = 0.55
+                else:
+                    bargap_value = 0.55
+
+                fig.update_layout(
+                    xaxis_title='Category',
+                    yaxis_title='Amount',
+                    font=dict(size=14, color='black'),
+                    showlegend=False,
+                    bargap=bargap_value
+                )
+
+                st.plotly_chart(fig)
 
         with card2:
             Total_Transaction = df23['Amount'].count()  # Assuming filtered_data is defined
@@ -248,7 +259,7 @@ if st.session_state.upload:
                 margin=dict(l=20, r=20, t=40, b=20),
                 showlegend=False,
                 xaxis_title='Category',
-                yaxis_title='Amount (in Crores)',
+                yaxis_title='Transactions',
                 font=dict(size=14, color='black'),
                 bargap=bargap_value
             )
@@ -291,43 +302,59 @@ if st.session_state.upload:
 
         if selected_category != 'All':
             if selected_category == f'Top 25 {Cost_Ctr} Transactions':
+                filtered_data['overall_Alloted_Amount'] = filtered_data.groupby(['year'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/Cost Ctr'] = filtered_data.groupby(['Cost Ctr'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/Cost Ctr/Year'] = filtered_data.groupby(['Cost Ctr', 'year'])['Amount'].transform('sum')
+                filtered_data['Percentage_Cumulative_Alloted/Cost Ctr'] = (filtered_data['Cumulative_Alloted/Cost Ctr/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
+                yearly_total2 = filtered_data.groupby('year')['Amount'].sum().reset_index()
+                yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year'}, inplace=True)
+                filtered_data['Percentage_Cumulative_Alloted/Cost Ctr/Year'] = (filtered_data['Cumulative_Alloted/Cost Ctr/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
 
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/Cost Ctr/Year', ascending=False)[
                     ['Cost Ctr', 'CostctrName',
                      'Cumulative_Alloted/Cost Ctr/Year',
                      'Percentage_Cumulative_Alloted/Cost Ctr/Year']].drop_duplicates(subset=['Cost Ctr'], keep='first')
-                filtered_data.rename(columns={'Cost Ctr':'Cost Center','CostctrName':'Name','Cumulative_Alloted/Cost Ctr/Year': 'Value (In ₹)',
-                                              'Percentage_Cumulative_Alloted/Cost Ctr/Year': '% total'},
+                filtered_data.rename(columns={'Cumulative_Alloted/Cost Ctr/Year': 'Value (In ₹)','CostctrName':'Name','Cost Ctr':'Cost Center',
+                                              'Percentage_Cumulative_Alloted/Cost Ctr/Year': '%total'},
                                      inplace=True)
                 filtered_data.reset_index(drop=True, inplace=True)
                 filtered_data.index = filtered_data.index + 1
                 filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
-                filtered_transactions = filtered_transactions.sort_values(by='percentage Transcation/costctr/year',
+                filtered_transactions['Cummulative_transactions2'] = len(filtered_transactions)
+                filtered_transactions['Cumulative_transactions/Cost Ctr'] = filtered_transactions.groupby(['Cost Ctr'])['Cost Ctr'].transform('count')
+                filtered_transactions['Cumulative_transactions/Cost Ctr/Year'] = filtered_transactions.groupby(['Cost Ctr'])['Cost Ctr'].transform('count')
+                filtered_transactions['percentage Transcation/Cost Ctr/year'] = filtered_transactions['Cumulative_transactions/Cost Ctr/Year'] / filtered_transactions[
+                    'Cummulative_transactions2'] * 100
+                filtered_transactions = filtered_transactions.sort_values(by='percentage Transcation/Cost Ctr/year',
                                                                           ascending=False)[['Cost Ctr', 'CostctrName',
                                                                                             'Cumulative_transactions/Cost Ctr/Year',
-                                                                                            'percentage Transcation/costctr/year']].drop_duplicates(
+                                                                                            'percentage Transcation/Cost Ctr/year'
+                                                                                            ]].drop_duplicates(
                     subset=['Cost Ctr'], keep='first')
                 filtered_transactions.rename(columns={'Cost Ctr':'Cost Center','CostctrName':'Name',
                                                       'Cumulative_transactions/Cost Ctr/Year': 'Transactions',
-                                                      'percentage Transcation/costctr/year': '% total'},
+                                                      'percentage Transcation/Cost Ctr/year': '% total'},
                                              inplace=True)
+                filtered_transactions.reset_index(drop=True, inplace=True)
+                filtered_transactions.index = filtered_transactions.index + 1
+                filtered_data.rename_axis('S.NO', axis=1, inplace=True)
                 filtered_transactions.reset_index(drop=True, inplace=True)
                 filtered_transactions.index = filtered_transactions.index + 1
                 filtered_transactions.rename_axis('S.NO', axis=1, inplace=True)
                 merged_df = pd.merge(filtered_data, filtered_transactions, on=['Cost Center','Name'])
 
-
             elif selected_category == f'Top 25 {G_L} Transactions':
-
+                filtered_data['overall_Alloted_Amount'] = filtered_data.groupby(['year'])['Amount'].transform('sum')
                 filtered_data['Cumulative_Alloted/G/L'] = filtered_data.groupby(['G/L'])['Amount'].transform('sum')
                 filtered_data['Cumulative_Alloted/G/L/Year'] = filtered_data.groupby(['G/L', 'year'])['Amount'].transform('sum')
-                filtered_data['Percentage_Cumulative_Alloted/G/L'] = (filtered_data['Cumulative_Alloted/G/L'] / filtered_data[
-                    'cumulative_Alloted_Amount']) * 100
+                filtered_data['Percentage_Cumulative_Alloted/G/L'] = (filtered_data['Cumulative_Alloted/G/L/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
                 yearly_total2 = filtered_data.groupby('year')['Amount'].sum().reset_index()
                 yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year'}, inplace=True)
                 filtered_data['Percentage_Cumulative_Alloted/G/L/Year'] = (filtered_data['Cumulative_Alloted/G/L/Year'] / filtered_data[
-                    'Total_Alloted_Amount/year']) * 100
+                    'overall_Alloted_Amount']) * 100
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/G/L/Year', ascending=False)[
                     ['G/L', 'G/L Name',
                      'Cumulative_Alloted/G/L/Year',
@@ -564,82 +591,6 @@ if st.session_state.upload:
         data.reset_index(drop=True, inplace=True)
         data.index += 1  # Start index from 1
 
-
-        @st.cache_resource(show_spinner=False)
-        def line_plot_overall_transactions(data, category, years, width=400, height=300):
-            filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
-            data_length = filtered_data.groupby('year').size().reset_index(name='data_len')
-
-            # Create the line plot
-            fig = px.line(data_length, x='year', y='data_len',
-                          title='Transactions Count ',
-                          labels={'year': 'Year', 'data_len': 'Transactions'},
-                          markers=True)
-
-            # Set mode to 'lines+markers'
-            fig.update_traces(mode='lines+markers')
-
-            # Update layout with width and height
-            fig.update_layout(width=width, height=height)
-
-            # Modify x-axis labels to include hyphens between years
-            fig.update_xaxes(tickvals=years,
-                             ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
-
-            # Format y-axis ticks as integers
-            fig.update_yaxes(tickformat=".0f")
-
-            # Add text annotations to data points
-            for year, count in zip(data_length['year'], data_length['data_len']):
-
-                fig.add_annotation(
-                    x=year,
-                    y=count,
-                    text=str(count),
-                    showarrow=False,
-                    font=dict(size=12, color='black'),
-                    align='center',
-                    yshift=15
-                )
-
-            return fig
-
-
-        @st.cache_resource(show_spinner=False)
-        def line_plot_used_amount(data, category, years, width=400, height=300):
-            data = data[(data['category'] == category) & (data['year'].isin(years))]
-
-            amount_length = data.groupby('year')['Amount'].sum().reset_index(name='amount_length')
-
-            # Create the line plot
-            fig = px.line(amount_length, x='year', y='amount_length',
-                          title='Transactions Value ',
-                          labels={'year': 'Year', 'amount_length': 'Transaction Amount'},
-                          markers=True)
-
-            # Set mode to 'lines+markers'
-            fig.update_traces(mode='lines+markers')
-
-            # Update layout with width and height
-            fig.update_layout(width=width, height=height)
-
-            # Modify x-axis labels to include hyphens between years
-            fig.update_xaxes(tickvals=years,
-                             ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
-
-            # Add titles on top of data points (annotations)
-            for year, amount in zip(amount_length['year'], amount_length['amount_length']):
-                fig.add_annotation(
-                    x=year,
-                    y=amount,
-                    text=f"{amount:.2f}",
-                    showarrow=False,
-                    font=dict(size=12, color='black'),
-                    align='center',
-                    yshift=15
-                )
-
-            return fig
         years = (data['year'].unique())
         years_df = pd.DataFrame({'year': data['year'].unique()})
         filtered_years = (data['year'].unique())
@@ -648,6 +599,8 @@ if st.session_state.upload:
         st.write("## Employee Reimbursement Trend")
 
         c2,col1, col2,c5 = st.columns([1,4,4,1])
+        c2.write("")
+        c5.write("")
         fig_employee = line_plot_overall_transactions(data, "Employee",years_df['year'])
         fig_employee2 = line_plot_used_amount(data, "Employee", years)
         col2.plotly_chart(fig_employee)
@@ -658,12 +611,16 @@ if st.session_state.upload:
         c2,co1, co2,c5 = st.columns([1,4,4,1])
         fig_korean_expats = line_plot_overall_transactions(data, "Korean Expats", years_df['year'])
         fig_korean_expats1 = line_plot_used_amount(data, "Korean Expats", years)
+        c2.write("")
+        c5.write("")
         co2.plotly_chart(fig_korean_expats)
         co1.plotly_chart(fig_korean_expats1)
 
         # Line plot for category "Vendor"
         st.write("## Vendor Payment Trend")
-        c2,c1, c2,c5 = st.columns([1,4,4,1])
+        co2,c1, c2,c5 = st.columns([1,4,4,1])
+        co2.write("")
+        c5.write("")
         fig_vendor = line_plot_overall_transactions(data, "Vendor",years_df['year'])
         fig_vendor1 = line_plot_used_amount(data, "Vendor", years)
         c2.plotly_chart(fig_vendor)
@@ -678,1194 +635,216 @@ if st.session_state.upload:
         cl1.plotly_chart(fig_others1)
     with t3:
         # Define the functions
-        def display_duplicate_invoices(exceptions):
-            dfe = exceptions.copy()
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center"},
-                       inplace=True)
-            c1, c2, c3, c4, c5 = st.columns(5)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            # Sorting by 'Invoice Number'
-            dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-            columns_to_convert = ['Name', 'Amount', 'Doc. Date', 'Invoice Number', "ID"]
-            dfe[columns_to_convert] = dfe[columns_to_convert].astype(str)
-            selected_option = c2.selectbox("Select Duplicate type", ["Duplicate Invoice", "Same amount,id,date",
-                                                                     "Similar amount,costctr,invoice"], index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "Same amount,id,date":
-                dfe = dfe[dfe.duplicated(subset=['Doc. Date', 'ID', 'Amount'], keep=False)]
-                dfe = dfe.sort_values(by=['ID','Amount'])
-            elif selected_option == "Similar amount,costctr,invoice":
-                grouped_df = dfe.groupby(['Cost Center', 'Amount']).filter(lambda group: len(group) > 1)
-
-                # Step 4: Compare values in column 'Invoice Number'
-                def compare_strings(s1, s2):
-                    common_chars = set(s1) & set(s2)
-                    return len(common_chars) >= 0.7 * min(len(s1), len(s2))
-
-                dfe = grouped_df[grouped_df.apply(
-                    lambda row: compare_strings(row['Invoice Number'], grouped_df['Invoice Number'].iloc[0]), axis=1)]
-                dfe = dfe.groupby(['Amount','Cost Center']).filter(lambda group: len(group) > 1)
-                # dfe = dfe.sort_values(by=['Amount','Invoice Number'])
-                dfe.reset_index(drop=True, inplace=True)
-            elif selected_option == "Duplicate Invoice":
-                dfe = dfe[dfe.duplicated(subset=['Invoice Number'], keep=False)]
-                dfe = dfe.sort_values(by=['Invoice Number','ID','Name'], ascending=True)
-                # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-            # dfe = dfe.sort_values(by=['Invoice Number','ID'], ascending=True)
-            # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            dfe['Amount'] = pd.to_numeric(dfe['Amount'], errors='coerce')
-            dfe['Amount'] = dfe['Amount'].astype(int)
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with Duplicate Invoices</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Invoice Number</div>",
-                    unsafe_allow_html=True)
-            else:
-                c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-
-                    # Check if the length of Total_Amount_Alloted is greater than 5
-                    if len(str(Total_Amount_Alloted)) > 5:
-                        # Get the integer part of the total amount
-                        integer_part = int(Total_Amount_Alloted)
-                        # Calculate the length of the integer part
-                        integer_length = len(str(integer_part))
-
-                        # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                        if integer_length > 5 and integer_length <= 7:
-                            Total_Amount_Alloted /= 100000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                        # Divide by 1 crore if the integer length is greater than 7
-                        elif integer_length > 7:
-                            Total_Amount_Alloted /= 10000000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                    # Display the total amount spent
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                #
-                # with card1:
-                #     Total_Amount_Alloted = dfe['Amount'].sum()
-                #     # Calculate percentage of yearly allotted amount per category
-                #
-                #     st.markdown(
-                #         f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure (in Crores)</h3>",
-                #         unsafe_allow_html=True
-                #     )
-                #     Total_alloted = Total_Amount_Alloted / 10000000
-                #     st.markdown(
-                #         f"<div style='{card1_style}'>"
-                #         f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f}crores</h2>"
-                #         "</div>",
-                #         unsafe_allow_html=True
-                #     )
-                #     st.write("")
-
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                    # Display the DataFrame
-
-                c1, c2, c3 = st.columns([1, 8, 1])
-                dfe = dfe.drop(columns=['year'])
-                dfe['Amount'] = dfe['Amount'].round()
-                # dfe = dfe.sort_values(by=['Name', 'Amount', 'Doc. Date'])
-                # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                c2.write(dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                              'G/L', 'Document No',
-                              'Doc. Date', 'Pstng Date', 'Amount']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Duplicate Invoice.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        def same_Creator_Verified_HOG(exceptions):
-            dfe = exceptions.copy()
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            dfe = dfe[(dfe['Created'] == dfe['Verified by']) & (dfe['Verified by'] == dfe['HOG Approval by'])]
-            dfe = dfe
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                                'Created': 'Created by'},
-                       inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with same Creator ID , Verified ID and HOG Approval</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID, Verified ID and HOG Approval ID</div>",
-                    unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-
-                    # Check if the length of Total_Amount_Alloted is greater than 5
-                    if len(str(Total_Amount_Alloted)) > 5:
-                        # Get the integer part of the total amount
-                        integer_part = int(Total_Amount_Alloted)
-                        # Calculate the length of the integer part
-                        integer_length = len(str(integer_part))
-
-                        # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                        if integer_length > 5 and integer_length <= 7:
-                            Total_Amount_Alloted /= 100000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                        # Divide by 1 crore if the integer length is greater than 7
-                        elif integer_length > 7:
-                            Total_Amount_Alloted /= 10000000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                    # Display the total amount spent
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-
-                # with card1:
-                #     Total_Amount_Alloted = dfe['Amount'].sum()
-                #     # Calculate percentage of yearly allotted amount per category
-                #
-                #     st.markdown(
-                #         f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                #         unsafe_allow_html=True
-                #     )
-                #     Total_alloted = Total_Amount_Alloted
-                #     st.markdown(
-                #         f"<div style='{card1_style}'>"
-                #         f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                #         "</div>",
-                #         unsafe_allow_html=True
-                #     )
-                #     st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe = dfe.drop(columns=['year'])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.drop(columns=['year'])
-                dfe = dfe.sort_values(by=['Created by', 'Cost Center'])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                # c2.write(dfe[
-                #              ['Payable req.no', 'Type', 'ID', 'Name', 'Invoice Number', 'text', 'Cost Center',
-                #               'G/L', 'Document No',
-                #               'Doc. Date', 'Pstng Date', 'Created by',  'Verified by', 'HOG Approval by',
-                #               ]])
-                #
-                # excel_buffer = BytesIO()
-                # dfe.to_excel(excel_buffer, index=False)
-                # excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # # Convert Excel buffer to base64
-                # excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # # Download link for Excel file within a Markdown
-                # download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Same CreatoR_HOG Approval ID.xlsx">Download Excel file</a>'
-                # st.markdown(download_link, unsafe_allow_html=True)
-                dfe['Amount'] = dfe['Amount'].round()
-                c22.write(dfe[
-                              ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number', 'Text', "Cost Ctr",
-                               'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same_Creator_Verified_HOG Approval ID.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        def same_Creator_Verified_HOGno(exceptions):
-            dfe = exceptions.copy()
-            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-            dfe = dfe[
-                (dfe['Created'] == dfe['Verified by']) & (dfe['HOG Approval by'].isna())]
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(
-                columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                         'Created': 'Created by'},
-                inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with same Creator ID , Verified ID  and HOG Approval Is None</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID, Verified ID and With No HOG Approval</div>",
-                    unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-
-                    # Check if the length of Total_Amount_Alloted is greater than 5
-                    if len(str(Total_Amount_Alloted)) > 5:
-                        # Get the integer part of the total amount
-                        integer_part = int(Total_Amount_Alloted)
-                        # Calculate the length of the integer part
-                        integer_length = len(str(integer_part))
-
-                        # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                        if integer_length > 5 and integer_length <= 7:
-                            Total_Amount_Alloted /= 100000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                        # Divide by 1 crore if the integer length is greater than 7
-                        elif integer_length > 7:
-                            Total_Amount_Alloted /= 10000000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                    # Display the total amount spent
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.drop(columns=['year'])
-                dfe = dfe.sort_values(by=['Name','Created by',"Cost Center"])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                c22.write(dfe[
-                              ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                              'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same_Creator_Verified_NoHOG.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        def Creator_Verified_HOGno(exceptions):
-            dfe = exceptions.copy()
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-            dfe = dfe[(~dfe['Created'].isna()) & (~dfe['Verified by'].isna()) & dfe['HOG Approval by'].isna()]
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(
-                columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                         'Created': 'Created by'},
-                inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            options = ["All"] + [gl for gl in dfe['G/L'].unique() if gl != "All"]
-            selected_option = c2.selectbox("Select a G/L", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['G/L'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With No HOG Approval</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries Without HOG Approval</div>",
-                    unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-
-                    # Check if the length of Total_Amount_Alloted is greater than 5
-                    if len(str(Total_Amount_Alloted)) > 5:
-                        # Get the integer part of the total amount
-                        integer_part = int(Total_Amount_Alloted)
-                        # Calculate the length of the integer part
-                        integer_length = len(str(integer_part))
-
-                        # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                        if integer_length > 5 and integer_length <= 7:
-                            Total_Amount_Alloted /= 100000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                        # Divide by 1 crore if the integer length is greater than 7
-                        elif integer_length > 7:
-                            Total_Amount_Alloted /= 10000000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                    # Display the total amount spent
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe = dfe.drop(columns=['year'])
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.sort_values(by=['Name',"Cost Center"])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                c22.write(dfe[
-                              ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                               'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download=" Without HOG Approval.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        def Creator_HOG(exceptions):
-            dfe = exceptions.copy()
-            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            dfe = dfe[
-                (dfe['Created'] == dfe['HOG Approval by'])]
-
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(
-                columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                         'Created': 'Created by'},
-                inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With Same CreatorID and HOG ApprovalID</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries With Same CreatorID and HOG ApprovalID</div>",
-                    unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-
-                    # Check if the length of Total_Amount_Alloted is greater than 5
-                    if len(str(Total_Amount_Alloted)) > 5:
-                        # Get the integer part of the total amount
-                        integer_part = int(Total_Amount_Alloted)
-                        # Calculate the length of the integer part
-                        integer_length = len(str(integer_part))
-
-                        # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                        if integer_length > 5 and integer_length <= 7:
-                            Total_Amount_Alloted /= 100000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                        # Divide by 1 crore if the integer length is greater than 7
-                        elif integer_length > 7:
-                            Total_Amount_Alloted /= 10000000
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                    # Display the total amount spent
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.drop(columns=['year'])
-                dfe = dfe.sort_values(by=['Name','Created by'])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                c22.write(dfe[
-                              ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                               'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Same CreatorID and HOG ApprovalID.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        def same_Creator_Verified(exceptions):
-            dfe = exceptions.copy()
-            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            dfe = dfe[
-                (dfe['Created'] == dfe['Verified by'])]
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(
-                columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                         'Created': 'Created by'},
-                inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With Same Creator ID And Verified ID</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID And Verified ID </div>",
-                    unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-
-                        # Check if the length of Total_Amount_Alloted is greater than 5
-                        if len(str(Total_Amount_Alloted)) > 5:
-                            # Get the integer part of the total amount
-                            integer_part = int(Total_Amount_Alloted)
-                            # Calculate the length of the integer part
-                            integer_length = len(str(integer_part))
-
-                            # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                            if integer_length > 5 and integer_length <= 7:
-                                Total_Amount_Alloted /= 100000
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                            # Divide by 1 crore if the integer length is greater than 7
-                            elif integer_length > 7:
-                                Total_Amount_Alloted /= 10000000
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                            else:
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                        # Display the total amount spent
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.sort_values(by=['Created by','Name',"Cost Center"])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                dfe = dfe.drop(columns=['year'])
-                c22.write(dfe[
-                              ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                               'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same Creator ID And Verified ID.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        df = pd.read_excel(
-            "unlocked holiday.xlsx")
-
-
-        def Approval_holidays(exceptions):
-            dfe = exceptions.copy()
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-            dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
-            dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
-            dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
-            df['date'] = pd.to_datetime(df['date'], format='%Y/%m/%d', errors='coerce')
-            # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
-            dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
-            # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
-            # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
-            dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
-            dfe['Doc. Date'] = dfe['Doc. Date'].dt.date
-            dfe['Verified on'] = dfe['Verified on'].dt.date
-
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(
-                columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                         'Created': 'Created by'},
-                inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-
-
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES MADE ON HOLIDAYS</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries made on holidays</div>",
-                    unsafe_allow_html=True)
-            else:
-
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-
-                        # Check if the length of Total_Amount_Alloted is greater than 5
-                        if len(str(Total_Amount_Alloted)) > 5:
-                            # Get the integer part of the total amount
-                            integer_part = int(Total_Amount_Alloted)
-                            # Calculate the length of the integer part
-                            integer_length = len(str(integer_part))
-
-                            # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                            if integer_length > 5 and integer_length <= 7:
-                                Total_Amount_Alloted /= 100000
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                            # Divide by 1 crore if the integer length is greater than 7
-                            elif integer_length > 7:
-                                Total_Amount_Alloted /= 10000000
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                            else:
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                        # Display the total amount spent
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    # Total_alloted = Total_Amount_Alloted
-                    # st.markdown(
-                    #     f"<div style='{card1_style}'>"
-                    #     f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                    #     "</div>",
-                    #     unsafe_allow_html=True
-                    # )
-                    # st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.drop(columns=['year'])
-                dfe = dfe.sort_values(by=['Pstng Date',"Cost Center",'Name'])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                # dfe = dfe.drop(columns=['year'])
-                c22.write(dfe[
-                              ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                               'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Approval On Holidays.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-
-        def Pstingverified_holidays(exceptions):
-            dfe = exceptions.copy()
-            dfe.drop(columns=['ID', 'Cummulative_transactions', 'Cummulative_transactions/category',
-                              'overall_transactions/year', 'overall_transactions/category/year',
-                              'cumulative_Transations/Vendor', 'Transations/year/Vendor',
-                              'Cumulative_percentransations_made', 'Cumulative_percentransations_made/category',
-                              'Yearly_percentransations_made/category', 'percentransations_made/category/year',
-                              'percentransations_made/year', 'cumulative_Alloted_Amount',
-                              'cumulative_Alloted_Amount\\Category', 'Total_Alloted_Amount/year',
-                              'Yearly_Alloted_Amount\\Category', 'Cumulative_Amount_used', 'Amount_used/Year',
-                              'Cumulative_percentageamount_used', 'total_percentage_of_amount/category_used',
-                              'percentage_amount_used_per_year', 'percentage_of_amount/category_used/year',
-                              'percentage_Yearly_Alloted_Amount\\Category', 'Cumulative_transactions/Cost Ctr',
-                              'Cumulative_transactions/Cost Ctr/Year', 'Cumulative_Alloted/Cost Ctr',
-                              'Cumulative_Alloted/Cost Ctr/Year', 'Percentage_Cumulative_Alloted/Cost Ctr',
-                              'Percentage_Cumulative_Alloted/Cost Ctr/Year', 'used_amount_crores',
-                              'percentage Transcation/costctr/year'], inplace=True)
-            # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-            dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
-            dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
-            dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
-            df['date'] = pd.to_datetime(df['date'], format='%Y/%m/%d', errors='coerce')
-            # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
-            dfe = dfe[(dfe['Pstng Date'] == dfe['Verified on']) & dfe['Pstng Date'].isin(df['date'])]
-
-            # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
-            # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
-            dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
-            dfe['Doc. Date'] = dfe['Doc. Date'].dt.date
-            dfe['Verified on'] = dfe['Verified on'].dt.date
-
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(
-                columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                         'Created': 'Created by'},
-                inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-
-
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES MADE ON HOLIDAYS</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write(
-                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries made on holidays</div>",
-                    unsafe_allow_html=True)
-            else:
-
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-
-                        # Check if the length of Total_Amount_Alloted is greater than 5
-                        if len(str(Total_Amount_Alloted)) > 5:
-                            # Get the integer part of the total amount
-                            integer_part = int(Total_Amount_Alloted)
-                            # Calculate the length of the integer part
-                            integer_length = len(str(integer_part))
-
-                            # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                            if integer_length > 5 and integer_length <= 7:
-                                Total_Amount_Alloted /= 100000
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                            # Divide by 1 crore if the integer length is greater than 7
-                            elif integer_length > 7:
-                                Total_Amount_Alloted /= 10000000
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                            else:
-                                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                        else:
-                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                        # Display the total amount spent
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    # Total_alloted = Total_Amount_Alloted
-                    # st.markdown(
-                    #     f"<div style='{card1_style}'>"
-                    #     f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                    #     "</div>",
-                    #     unsafe_allow_html=True
-                    # )
-                    st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11, c22, c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.drop(columns=['year'])
-                dfe = dfe.sort_values(by=['Pstng Date',"Cost Center",'Name'])
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                c22.write(dfe[
-                              ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                               'G/L', 'Document No',
-                               'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-                dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                           'Reference invoice', 'Text', 'Document No',
-                           'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                           'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                           'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                           'Reference document', 'Reference invoice', 'Adv.doc year',
-                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                           'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                           'Amount', 'On', 'Updated on', 'Verified on',
-                           'HOG Approval on', 'Clearing date']]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Posting&verified On Holidays.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c42, c3, c4 = st.columns(4)
         option = c1.selectbox("Select an option",
-                              ["Duplicate Invoices", "No HOG Approval", "Same Creator and Verified ID",
-                               "Same Creator and HOG ID", "Same Creator,Verified and HOG ID",
-                               "Same Creator, Verified and NO HOG Approval", "Posting on holidays",
-                               "Posting and Verified During Holidays"],
+                              ["Duplicate Exceptions", "No approver(HOD_HOG)","Creator_Verifier_SAME",
+                               "Creator_Verified_SAME_NO Approver",
+                               "Creator_Approver(HOD_HOD)_SAME", "Creator_Verifier_Approver(HOD_HOD)_SAME",
+                                "Holiday Transactions", "Created_verified on Holidays"],
                               index=0)
-        if option == "Duplicate Invoices":
+        c42.write("")
+        c3.write("")
+        c4.write("")
+        if option == "Duplicate Exceptions":
             display_duplicate_invoices(exceptions)
-        elif option == "Same Creator,Verified and HOG ID":
-            same_Creator_Verified_HOG(exceptions)
-        elif option == "Same Creator, Verified and NO HOG Approval":
+        elif option == "Creator_Verified_SAME_NO Approver":
             same_Creator_Verified_HOGno(exceptions)
-        elif option == "No HOG Approval":
+        elif option == "No approver(HOD_HOG)":
             Creator_Verified_HOGno(exceptions)
-        elif option == "Same Creator and Verified ID":
+        elif option == "Creator_Verifier_SAME":
             same_Creator_Verified(exceptions)
-        elif option == "Same Creator and HOG ID":
+        elif option == "Creator_Approver(HOD_HOD)_SAME":
             Creator_HOG(exceptions)
-        elif option == "Posting on holidays":
+        elif option == "Creator_Verifier_Approver(HOD_HOD)_SAME":
+            same_Creator_Verified_HOG(exceptions)
+        elif option == "Holiday Transactions":
             Approval_holidays(exceptions)
-        elif option == "Posting and Verified During Holidays":
+        elif option == "Created_verified on Holidays":
             Pstingverified_holidays(exceptions)
+    with t4:
+        t41, t42, t43, t44 = st.tabs(["Factor 1", "Factor 2", "Factor 3", "Factor 4"])
+
+        with t41:
+            def ChangeWidgetFontSize(wgt_txt, wch_font_size='12px'):
+                htmlstr = """<script>var elements = window.parent.document.querySelectorAll('*'), i;
+                                for (i = 0; i < elements.length; ++i) { if (elements[i].innerText == |wgt_txt|) 
+                                    { elements[i].style.fontSize='""" + wch_font_size + """';} } </script>  """
+
+                htmlstr = htmlstr.replace('|wgt_txt|', "'" + wgt_txt + "'")
+                components.html(f"{htmlstr}", height=0, width=0)
+
+
+            # Renaming columns in the DataFrame
+            radio.rename(
+                columns={
+                    'Vendor Name': 'Name',
+                    'Type': "Doc.Type",
+                    'Vendor': "Reimbursement ID",
+                    "Cost Ctr": "Cost Center",
+                    'Doc. Date': 'Document Date',
+                    "Verified by": 'Verifier',
+                    'Created': 'Creator',
+                    'year':'Year'
+                },
+                inplace=True
+            )
+
+
+            radio = radio[['Payable req.no', 'Doc.Type', 'Reimbursement ID', 'Amount', 'Document Date', 'Name','Year',
+                           'Invoice Number', 'Text', 'Cost Center', 'G/L', 'Document No',
+                           'Pstng Date', 'Creator', 'Verifier', 'HOG Approval by', 'category',
+                           'Reference invoice', 'CostctrName', 'G/L Name', 'Profit Ctr',
+                           'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
+                           'Time', 'Updated at', 'Reason for Rejection', 'Verified at',
+                           'Reference document', 'Adv.doc year',
+                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
+                           'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
+                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
+                           'On', 'Updated on', 'Verified on',
+                           'HOG Approval on', 'Clearing date']]
+
+            radio['Amount'] = radio['Amount'].round()
+
+
+            columns_list = [
+                'Reimbursement ID', 'Amount', "Document Date",
+                "Cost Center", 'G/L', 'Invoice Number', 'Text'
+            ]
+
+            c11, c2, c3, c4 = st.columns(4)
+            options = ["All"] + [yr for yr in radio['Year'].unique() if yr != "All"]
+            selected_option = c11.selectbox("Choose an Year", options, index=0)
+            # Filter the DataFrame based on the selected option
+            if selected_option == "All":
+                radio = radio  # Return the entire DataFrame
+
+
+            else:
+                radio = radio[radio['Year'] == selected_option]
+
+            # Assuming 'radio' is your DataFrame
+
+            # Function to filter DataFrame for duplicate values based on selected checkboxes
+
+            def filter_dataframe(radio, columns_list):
+                # Dictionary to hold the checkbox states
+                checkbox_states = {}
+
+                # Create columns in Streamlit with the same number as elements in columns_list
+                cols = st.columns(len(columns_list))
+
+                # Use a for loop to create a checkbox in each column and store the state
+                for i, col in enumerate(cols):
+                    with col:
+                        # Create a checkbox and store its state
+                        checkbox_states[columns_list[i]] = st.checkbox(f"{columns_list[i]}", key=i)
+
+                # List to hold the names of columns to check for duplicates
+                columns_to_check = [column_name for column_name, is_checked in checkbox_states.items() if is_checked]
+
+                # Start with all rows
+                filtered_df = radio.copy()
+
+                # If any checkboxes are checked, filter the DataFrame for duplicates in those columns
+                if columns_to_check:
+                    # Filter the DataFrame for duplicates across the selected columns
+                    filtered_df = filtered_df[filtered_df.duplicated(subset=columns_to_check, keep=False)]
+                    filtered_df = filtered_df.sort_values(by=columns_to_check)
+                    filtered_df.reset_index(drop=True, inplace=True)
+                    filtered_df.index += 1
+                return filtered_df, ', '.join(columns_to_check)
+
+
+            filtered_df, columns_names = filter_dataframe(radio, columns_list)
+            st.markdown(
+                f"<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES with SAME {columns_names}</h2>",
+                unsafe_allow_html=True)
+
+            c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
+            with card1:
+                Total_Amount_Alloted = filtered_df['Amount'].sum()
+
+                # Check if the length of Total_Amount_Alloted is greater than 5
+                if len(str(Total_Amount_Alloted)) > 5:
+                    # Get the integer part of the total amount
+                    integer_part = int(Total_Amount_Alloted)
+                    # Calculate the length of the integer part
+                    integer_length = len(str(integer_part))
+
+                    # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
+                    if integer_length > 5 and integer_length <= 7:
+                        Total_Amount_Alloted /= 100000
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
+                    # Divide by 1 crore if the integer length is greater than 7
+                    elif integer_length > 7:
+                        Total_Amount_Alloted /= 10000000
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
+                    else:
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+                else:
+                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+
+                # Display the total amount spent
+                st.markdown(
+                    f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f"<div style='{card1_style}'>"
+                    f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                st.write("")
+
+            with card2:
+                Total_Transaction = len(filtered_df)
+                st.markdown(
+                    f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f"<div style='{card2_style}'>"
+                    f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+                st.write("")
+            c11, c522, c33 = st.columns([1, 8, 1])
+            # Display the DataFrame
+            c522.write("")
+            c522.write(filtered_df[['Payable req.no', 'Doc.Type', 'Reimbursement ID', 'Amount', 'Document Date', 'Name',
+                                      'Invoice Number', 'Text', 'Cost Center', 'G/L', 'Document No',
+                                      'Pstng Date', 'Creator', 'Verifier', 'HOG Approval by']])
+            filename = f"SAME {columns_names}.xlsx"
+            filtered_df.reset_index(drop=True, inplace=True)
+            filtered_df.index += 1  # Start index from 1
+            excel_buffer = BytesIO()
+            filtered_df.to_excel(excel_buffer, index=False)
+            excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
+            # Convert Excel buffer to base64
+            excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
+
+            download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="{filename}">Download Excel file</a>'
+            st.markdown(download_link, unsafe_allow_html=True)
+
+
+            # # Display the filtered DataFrame
+            # st.dataframe(filtered_df)
+
+            # col1, col2,c3,c4,c5,c6,c7 = st.columns(7)
+            #
+            # # Place each checkbox in one of the columns
+            # with col1:
+            #     coln_plus_1 = st.checkbox("70% SIMILAR INVOICE", key='coln_plus_1')
+            #
+            # with col2:
+            #     coln_plus_2 = st.checkbox("Holiday Transactions", key='coln_plus_2')
+
+
+
+
+
+
+
+
