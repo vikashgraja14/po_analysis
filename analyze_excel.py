@@ -221,12 +221,24 @@ def display_duplicate_invoices(exceptions):
 
         # Step 4: Compare values in column 'Invoice Number'
         def compare_strings(s1, s2):
-            common_chars = set(s1) & set(s2)
-            return len(common_chars) >= 0.7 * min(len(s1), len(s2))
+            min_length = min(len(s1), len(s2))
+
+            for i in range(min_length):
+                if s1[i] != s2[i]:
+                    return False  # Characters at the same index don't match
+
+            # If one string is longer, check if the remaining characters are all spaces
+            if len(s1) > min_length:
+                return s1[min_length:].isspace()
+            elif len(s2) > min_length:
+                return s2[min_length:].isspace()
+
+            return True  # All characters match
 
         dfe = grouped_df[grouped_df.apply(
             lambda row: compare_strings(row['Invoice Number'], grouped_df['Invoice Number'].iloc[0]), axis=1)]
         dfe = dfe.groupby(['Amount', 'Cost Center']).filter(lambda group: len(group) > 1)
+
         # dfe = dfe.sort_values(by=['Amount','Invoice Number'])
         dfe.reset_index(drop=True, inplace=True)
         filename = "Reimbursement Amount_CostCtr_70%Inv_SAME.xlsx"
@@ -305,12 +317,14 @@ def display_duplicate_invoices(exceptions):
 
         c1, c2, c3 = st.columns([1, 8, 1])
         dfe = dfe.drop(columns=['year'])
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         # dfe = dfe.sort_values(by=['Name', 'Amount', 'Doc. Date'])
         # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
-        c2.write(dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
+        c2.write(dfee[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                       'G/L', 'Document No',
                       'Doc. Date', 'Pstng Date', 'Amount']])
         dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
@@ -419,15 +433,16 @@ def same_Creator_Verified_HOG(exceptions):
         # Display the DataFrame
         dfe = dfe.drop(columns=['year'])
         # Display the DataFrame
-        dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.drop(columns=['year'])
         dfe = dfe.sort_values(by=['Created by', 'Cost Center'])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
 
         # st.markdown(download_link, unsafe_allow_html=True)
-        dfe['Amount'] = dfe['Amount'].round()
-        c22.write(dfe[
+        # dfe['Amount'] = dfe['Amount'].round()
+        c22.write(dfee[
                       ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number', 'Text', "Cost Ctr",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
@@ -536,12 +551,14 @@ def same_Creator_Verified_HOGno(exceptions):
             st.write("")
         c11, c22, c33 = st.columns([1, 8, 1])
         # Display the DataFrame
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.drop(columns=['year'])
         dfe = dfe.sort_values(by=['Name', 'Created by', "Cost Center"])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
-        c22.write(dfe[
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
+        c22.write(dfee[
                       ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
@@ -657,11 +674,13 @@ def Creator_Verified_HOGno(exceptions):
         c11, c22, c33 = st.columns([1, 8, 1])
         # Display the DataFrame
         dfe = dfe.drop(columns=['year'])
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.sort_values(by=['Name', "Cost Center"])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
-        c22.write(dfe[
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
+        c22.write(dfee[
                       ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
@@ -771,12 +790,14 @@ def Creator_HOG(exceptions):
             st.write("")
         c11, c22, c33 = st.columns([1, 8, 1])
         # Display the DataFrame
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.drop(columns=['year'])
         dfe = dfe.sort_values(by=['Name', 'Created by'])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
-        c22.write(dfe[
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
+        c22.write(dfee[
                       ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
@@ -886,12 +907,14 @@ def same_Creator_Verified(exceptions):
             st.write("")
         c11, c22, c33 = st.columns([1, 8, 1])
         # Display the DataFrame
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.sort_values(by=['Created by', 'Name', "Cost Center"])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
         dfe = dfe.drop(columns=['year'])
-        c22.write(dfe[
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
+        c22.write(dfee[
                       ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
@@ -918,7 +941,7 @@ def same_Creator_Verified(exceptions):
         st.markdown(download_link, unsafe_allow_html=True)
 
 
-df = pd.read_excel(
+dfholiday = pd.read_excel(
     "unlocked holiday.xlsx")
 
 
@@ -928,9 +951,9 @@ def Approval_holidays(exceptions):
     dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
     dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
     dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
-    df['date'] = pd.to_datetime(df['date'], format='%Y/%m/%d', errors='coerce')
+    dfholiday['date'] = pd.to_datetime(dfholiday['date'], format='%Y/%m/%d', errors='coerce')
     # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
-    dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
+    dfe = dfe[dfe['Pstng Date'].isin(dfholiday['date'])]
     # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
     # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
     dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
@@ -1027,13 +1050,15 @@ def Approval_holidays(exceptions):
             st.write("")
         c11, c22, c33 = st.columns([1, 8, 1])
         # Display the DataFrame
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.drop(columns=['year'])
         dfe = dfe.sort_values(by=['Pstng Date', "Cost Center", 'Name'])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
         # dfe = dfe.drop(columns=['year'])
-        c22.write(dfe[
+        c22.write(dfee[
                       ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
@@ -1066,9 +1091,9 @@ def Pstingverified_holidays(exceptions):
     dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
     dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
     dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
-    df['date'] = pd.to_datetime(df['date'], format='%Y/%m/%d', errors='coerce')
+    dfholiday['date'] = pd.to_datetime(dfholiday['date'], format='%Y/%m/%d', errors='coerce')
     # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
-    dfe = dfe[(dfe['Pstng Date'] == dfe['Verified on']) & dfe['Pstng Date'].isin(df['date'])]
+    dfe = dfe[(dfe['Pstng Date'] == dfe['Verified on']) & dfe['Pstng Date'].isin(dfholiday['date'])]
 
     # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
     # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
@@ -1158,13 +1183,16 @@ def Pstingverified_holidays(exceptions):
             )
             st.write("")
         c11, c22, c33 = st.columns([1, 8, 1])
+
         # Display the DataFrame
-        dfe['Amount'] = dfe['Amount'].round()
+        # dfe['Amount'] = dfe['Amount'].round()
         dfe = dfe.drop(columns=['year'])
         dfe = dfe.sort_values(by=['Pstng Date', "Cost Center", 'Name'])
         dfe.reset_index(drop=True, inplace=True)
         dfe.index += 1  # Start index from 1
-        c22.write(dfe[
+        dfee = dfe.copy()
+        dfee['Amount'] = dfee['Amount'].round()
+        c22.write(dfee[
                       ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
                        'G/L', 'Document No',
                        'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
