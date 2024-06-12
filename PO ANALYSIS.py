@@ -1,24 +1,50 @@
-import streamlit as st
-import matplotlib.pyplot as plt
-from analyze_excel import process_data
-import seaborn as sns
-import re
-import base64
-from io import BytesIO
-import pandas as pd
-import plotly.express as px
-@st.cache_resource(show_spinner=False)
+from streamlit_dynamic_filters import DynamicFilters
+from functions import *
+import streamlit.components.v1 as components
+dfholiday = pd.read_excel(
+    "unlocked holiday.xlsx")
+card1_style = """
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+             align-items: center;
+             background-color: #ffffff;
+             padding: 10px;
+             border-radius: 10px;
+             font-style: bold:
+             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+             max-width: 200px; /* Adjust the max-width as needed */
+             margin-left: 50px; /* Set left margin to auto */
+             # margin-right: auto; /* Set right margin to auto */
+         """
+card2_style = """
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+             align-items: center;
+             background-color: #ffffff;
+             padding: 10px;
+             border-radius: 10px;
+             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+             max-width: 200px; /* Adjust the max-width as needed */
+             margin-left: 50px; /* Set left margin to auto */
+             # margin-right: auto; /* Set right margin to auto */
+         """
+
+
 def on_upload_click():
     """
     Callback function for the upload button click event.
     """
     st.session_state.upload = True
-@st.cache_resource(show_spinner=False)
+
+
 def on_analyse_click():
     """
     Callback function for the analyse button click event.
     """
     st.session_state.analyse = True
+
 
 # Initialize session state keys
 if 'upload' not in st.session_state:
@@ -29,7 +55,8 @@ if 'analyse' not in st.session_state:
     st.session_state.analyse = False
 
 st.set_page_config(layout="wide")
-st.markdown("<h1 style='text-align: center; color: black;'><b>NON PO PAYMENT ANALYSIS </b></h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: black;'><b>NON PO PAYMENT ANALYSIS </b></h1>",
+            unsafe_allow_html=True)
 with st.expander("Upload Excel Files", expanded=False):
     with st.form("my_form"):
         # File Uploader
@@ -48,100 +75,138 @@ if files:
 
 if st.session_state.upload:
     # Process only the first file from the list
-    grouped_data = process_data(files[0])
-    data = grouped_data.copy()
-    exceptions= grouped_data.copy()
-    t1, t2,t3 = st.tabs(["Overall Analysis","Yearly Analysis","Exceptions"])
-    with t2:
-        col1, col2, col3 = st.columns(3)  # Split the page into two columns
+    if len(files) == 1:
+        grouped_data = process_data(files[0])
+    else:
+        # Process each file and concatenate the dataframes
+        all_data = []
+        for file in files:
+            all_data.append(process_data(file))
+        grouped_data = pd.concat(all_data)
 
+    # Create copies of the data
+    radio = grouped_data.copy()
+    data = grouped_data.copy()
+    exceptions = grouped_data.copy()
+    exceptions2 = grouped_data.copy()
+
+
+
+    t1, t2, t3, t4= st.tabs(["Overall Analysis", "Yearly Analysis", "Exceptions","Radio Button"])
+    with t2:
+        col1, col2, col3, col4 = st.columns(4)  # Split the page into two columns
+        grouped_data = grouped_data.copy()
         selected_year = col1.selectbox('Select Year', grouped_data['year'].unique())
         filtered_data = grouped_data[grouped_data['year'] == selected_year]
-
-        # Define card styles
-        card1_style = """
-                     display: flex;
-                     flex-direction: column;
-                     justify-content: center;
-                     align-items: center;
-                     background-color: #ffffff;
-                     padding: 10px;
-                     border-radius: 10px;
-                     font-style: bold:
-                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                     max-width: 200px; /* Adjust the max-width as needed */
-                     margin-left: 50px; /* Set left margin to auto */
-                     # margin-right: auto; /* Set right margin to auto */
-                 """
-
-        card2_style = """
-                     display: flex;
-                     flex-direction: column;
-                     justify-content: center;
-                     align-items: center;
-                     background-color: #ffffff;
-                     padding: 10px;
-                     border-radius: 10px;
-                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                     max-width: 200px; /* Adjust the max-width as needed */
-                     margin-left: 50px; /* Set left margin to auto */
-                     # margin-right: auto; /* Set right margin to auto */
-                 """
-
-        # Layout the cards
+        filtered_data['Cost Ctr'] = filtered_data['Cost Ctr'].astype(str)
+        filtered_data['G/L'] = filtered_data['G/L'].astype(str)
+        filtered_data['Vendor'] = filtered_data['Vendor'].astype(str)
+        filtered_data['Cost Ctr'] = filtered_data['Cost Ctr'] + ' - ' + filtered_data[
+            'CostctrName']
+        filtered_data['G/L'] = filtered_data['G/L'] + ' - ' + filtered_data['G/L Name']
+        filtered_data['Vendor'] = filtered_data['Vendor'] + ' - ' + filtered_data['Vendor Name']
+        filtered_data['Cost Ctr'] = filtered_data['Cost Ctr'].astype(str)
+        filtered_data['G/L'] = filtered_data['G/L'].astype(str)
+        filtered_data['Vendor'] = filtered_data['Vendor'].astype(str)
+        dynamic_filters = DynamicFilters(filtered_data, filters=['Cost Ctr', 'G/L', 'Vendor'])
+        dynamic_filters.display_filters(location='columns', num_columns=4, gap='large')
+        filtered_data = dynamic_filters.filter_df()
+        filtered_data.reset_index(drop=True, inplace=True)
+        filtered_data.index = filtered_data.index + 1
+        filtered_data.rename_axis('S.NO', axis=1, inplace=True)
+        for col in ['Cost Ctr', 'G/L', 'Vendor']:
+            filtered_data[col] = filtered_data[col].str.split('-').str[0]
+        df23 = filtered_data.copy()
         c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
         with card1:
-            Total_Amount_Alloted = filtered_data['Total_Alloted_Amount/year'].iloc[0]
-            # Calculate percentage of yearly allotted amount per category
-            filtered_data['percentage_Yearly_Alloted_Amount/Category'] = (filtered_data[
-                                                                              'used_amount_crores'] / Total_Amount_Alloted) * 1000000000
+                Total_Amount_Alloted = filtered_data['Amount'].sum()
 
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent (in Crores)</h3>",
-                unsafe_allow_html=True
-            )
-            Total_alloted = Total_Amount_Alloted / 10000000
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f}crores</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-            st.write(
-                "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Amount Spent In Crores-Category</h2>",
-                unsafe_allow_html=True)
-            plt.figure(figsize=(8, 5), facecolor='none')  # Adjust figure size
-            bars = sns.barplot(x=filtered_data['category'],
-                               y=filtered_data['used_amount_crores'],
-                               color='darkblue', edgecolor='none', saturation=0.55,
-                               width=0.4)  # Set bar color and remove borders
+                # Check if the length of Total_Amount_Alloted is greater than 5
+                if len(str(Total_Amount_Alloted)) > 5:
+                    # Get the integer part of the total amount
+                    integer_part = int(Total_Amount_Alloted)
+                    # Calculate the length of the integer part
+                    integer_length = len(str(integer_part))
 
-            plt.xlabel('Category', fontsize=14, fontweight='bold', color='black')  # Customize x-axis label
-            plt.ylabel('Amount', fontsize=14, fontweight='bold',
-                       color='black')  # Customize y-axis label
-            plt.xticks(fontsize=12, fontweight='bold', color='black')  # Rotate x-axis labels and adjust font size
-            plt.yticks(fontsize=12, fontweight='bold', color='black')
-            plt.tight_layout()
+                    # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
+                    if integer_length > 5 and integer_length <= 7:
+                        Total_Amount_Alloted /= 100000
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
+                    # Divide by 1 crore if the integer length is greater than 7
+                    elif integer_length > 7:
+                        Total_Amount_Alloted /= 10000000
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
+                    else:
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+                else:
+                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
 
-            # Adding value labels on top of bars
-            # Adding value labels inside the bars for amount
-            for bar in bars.patches:
-                height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width() / 2, height, f'{height:.2f}', ha='center', va='bottom',
-                         fontsize=14)
-            plt.grid(True)  # Remove gridlines
+                # Display the total amount spent
+                st.markdown(
+                    f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent </h3>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(
+                    f"<div style='{card1_style}'>"
+                    f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
 
-            # Show only the x and y-axis
-            plt.gca().spines['left'].set_visible(False)
-            plt.gca().spines['top'].set_visible(False)  # Hide top spine
-            plt.gca().spines['right'].set_visible(False)  # Hide right spine
+                st.write(
+                    "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Amount Spent -Category</h2>",
+                    unsafe_allow_html=True)
 
-            # Show plot in Streamlit
-            st.pyplot(plt)
+                # Assuming 'filtered_data' is a DataFrame that has been defined earlier
+                category_amount = filtered_data.groupby('category')['Amount'].sum().reset_index()
+
+                fig = px.bar(category_amount, x='category', y='Amount', color='category',
+                             labels={'Amount': 'Amount (in Crores)'}, title='Amount Spent In Crores by Category',
+                             width=400, height=525, template='plotly_white')
+
+
+                def format_amount(amount):
+                    integer_part = int(amount)
+                    integer_length = len(str(integer_part))
+                    if integer_length > 5 and integer_length <= 7:
+                        return f"₹ {amount / 100000:,.2f} lks"
+                    elif integer_length > 7:
+                        return f"₹ {amount / 10000000:,.2f} crs"
+                    else:
+                        return f"₹ {amount:,.2f}"
+
+
+                fig.update_traces(texttemplate='%{customdata}', textposition='outside')
+
+                # Add a loop to iterate over each trace and update its 'customdata' with the correct amount
+                for i, amount in enumerate(category_amount['Amount']):
+                    fig.data[i].customdata = [format_amount(amount)]
+
+                num_bars = len(category_amount)
+
+                if num_bars == 1:
+                    bargap_value = 0.8
+                elif num_bars == 4:
+                    bargap_value = 0.3
+                elif num_bars == 2:
+                    bargap_value = 0.7
+                elif num_bars == 3:
+                    bargap_value = 0.55
+                else:
+                    bargap_value = 0.55
+
+                fig.update_layout(
+                    xaxis_title='Category',
+                    yaxis_title='Amount',
+                    font=dict(size=14, color='black'),
+                    showlegend=False,
+                    bargap=bargap_value
+                )
+
+                st.plotly_chart(fig)
 
         with card2:
-            Total_Transaction = filtered_data['overall_transactions/year'].iloc[0]
+            Total_Transaction = df23['Amount'].count()  # Assuming filtered_data is defined
             st.markdown(
                 f"<h3 style='text-align: center; font-size: 25px;'>Total Count Of Transactions</h3>",
                 unsafe_allow_html=True
@@ -152,61 +217,59 @@ if st.session_state.upload:
                 "</div>",
                 unsafe_allow_html=True
             )
-            st.write("")
             st.write(
                 "<h2 style='text-align: center; font-size: 25px; font-weight: bold; color: black;'>Transaction Count-Category</h2>",
                 unsafe_allow_html=True)
-            plt.figure(figsize=(8, 5), facecolor='none')
-            bars = sns.barplot(x=filtered_data['category'],
-                               y=filtered_data['used_amount_crores'],
-                               color='darkblue', edgecolor='none', saturation=0.55,
-                               width=0.4)
-
-            plt.xlabel('Category', fontsize=14, fontweight='bold', color='black')  # Customize x-axis label
-            plt.ylabel('Transactions ', fontsize=14, fontweight='bold',
-                       color='black')  # Customize y-axis label
-            plt.xticks(fontsize=12, fontweight='bold', color='black')  # Rotate x-axis labels and adjust font size
-            plt.yticks(fontsize=12, fontweight='bold', color='black')  # Adjust font size of y-axis labels
-            plt.tight_layout()
-
-            # Remove gridlines
-            plt.grid(True)
-
-            # Adding value labels on top of bars
-            plt.figure(figsize=(8, 5))
-            bars = sns.barplot(x=filtered_data['category'], y=filtered_data['overall_transactions/category/year'],
-                               color='darkblue', edgecolor='none',
-                               saturation=0.55, width=0.4)  # Adjust saturation for darker color
-
-            plt.xlabel('Category', fontsize=12, fontweight='bold', color='black')  # Customize x-axis label
-            plt.ylabel('Transactions ', fontsize=12, fontweight='bold',
-                       color='black')  # Customize y-axis label
-            plt.xticks(fontsize=12, fontweight='bold', color='black')  # Rotate x-axis labels and adjust font size
-            plt.yticks(fontsize=12, fontweight='bold', color='black')  # Adjust font size of y-axis labels
-            plt.tight_layout()
-
-            # Remove gridlines
-            plt.grid(True)
-
-            # Adding value labels on top of bars
-            for bar in bars.patches:
-                height = bar.get_height()
-                # Convert height to an integer
-                height_int = int(height)
-                # Display the integer value without decimal points
-                plt.text(bar.get_x() + bar.get_width() / 2, height, f'{height_int}', ha='center', va='bottom',
-                         fontsize=14)
-            plt.gca().spines['left'].set_visible(False)
-            plt.gca().spines['top'].set_visible(False)  # Hide top spine
-            plt.gca().spines['right'].set_visible(False)  # Hide right spine
-
-            # Adjust space between bars
-
-            # Show plot in Streamlit
-            st.pyplot(plt)
             st.write("")
+            category_amount = filtered_data.groupby('category')['Amount'].count().reset_index()
+
+            fig = px.bar(category_amount, x='category', y='Amount', color='category',
+                         labels={'Amount': 'Transactions'}, title='Transaction Count by Category',
+                         width=400, height=500, template='plotly_white')
+
+            # Add text annotations for each bar
+            for trace in fig.data:
+                for i, value in enumerate(trace.y):
+                    fig.add_annotation(
+                        x=trace.x[i],
+                        y=value,
+                        text=f"{value}",
+                        showarrow=True,
+                        font=dict(size=12, color='black'),
+                        align='center',
+                        yshift=5
+                    )
+
+            # Determine the number of bars
+            num_bars = len(category_amount)
+
+            # Set the bargap based on the number of bars
+            if num_bars == 1:
+                bargap_value = 0.8
+            elif num_bars == 4:
+                bargap_value = 0.3
+            elif num_bars == 2:
+                bargap_value = 0.7
+            elif num_bars == 3:
+                bargap_value = 0.55
+            else:
+                # Default value (you can adjust this as needed)
+                bargap_value = 0.55
+
+            # Customize the layout
+            fig.update_layout(
+                annotations=[dict(showarrow=False)],
+                margin=dict(l=20, r=20, t=40, b=20),
+                showlegend=False,
+                xaxis_title='Category',
+                yaxis_title='Transactions',
+                font=dict(size=14, color='black'),
+                bargap=bargap_value
+            )
+            # Show the plot in Streamlit
+            st.plotly_chart(fig)
             st.write("")
-        unique_categories = grouped_data['category'].unique()
+        unique_categories = filtered_data['category'].unique()
         unique_categories = sorted(unique_categories, key=len, reverse=True)
         preferred_order = ['Vendor', 'Employee', 'Korean Expats', 'Others']
 
@@ -228,45 +291,73 @@ if st.session_state.upload:
         selected_category = col1.selectbox("Select Category or Option:", unique_categories_with_options)
 
         # Get all unique values in the 'Cost Ctr' column
-        all_cost_ctrs = grouped_data['Cost Ctr'].unique()
+        all_cost_ctrs = filtered_data['Cost Ctr'].unique()
 
         # Set selected_cost_ctr to represent all values in the 'Cost Ctr' column
         selected_cost_ctr = 'All'  # or all_cost_ctrs if you want the default to be all values
 
         # Filter the data based on the selected year and dropdown selections
-        filtered_data = grouped_data[grouped_data['year'] == selected_year]
-        df = grouped_data[grouped_data['year'] == selected_year]
-        filtered_transactions = grouped_data[grouped_data['year'] == selected_year]
+        filtered_data = filtered_data[filtered_data['year'] == selected_year]
+        # filtered_data = filtered_data.drop_duplicates(subset=['Vendor', 'year'], keep='first')
+        df = filtered_data[filtered_data['year'] == selected_year]
+        filtered_transactions = filtered_data[filtered_data['year'] == selected_year]
+        # filtered_transactions = filtered_transactions.drop_duplicates(subset=['Vendor', 'year'], keep='first')
 
         if selected_category != 'All':
             if selected_category == f'Top 25 {Cost_Ctr} Transactions':
+                filtered_data['overall_Alloted_Amount'] = filtered_data.groupby(['year'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/Cost Ctr'] = filtered_data.groupby(['Cost Ctr'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/Cost Ctr/Year'] = filtered_data.groupby(['Cost Ctr', 'year'])['Amount'].transform('sum')
+                filtered_data['Percentage_Cumulative_Alloted/Cost Ctr'] = (filtered_data['Cumulative_Alloted/Cost Ctr/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
+                yearly_total2 = filtered_data.groupby('year')['Amount'].sum().reset_index()
+                yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year'}, inplace=True)
+                filtered_data['Percentage_Cumulative_Alloted/Cost Ctr/Year'] = (filtered_data['Cumulative_Alloted/Cost Ctr/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
+
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/Cost Ctr/Year', ascending=False)[
                     ['Cost Ctr', 'CostctrName',
                      'Cumulative_Alloted/Cost Ctr/Year',
                      'Percentage_Cumulative_Alloted/Cost Ctr/Year']].drop_duplicates(subset=['Cost Ctr'], keep='first')
-                filtered_data.rename(columns={'Cost Ctr':'Cost Center','CostctrName':'Name','Cumulative_Alloted/Cost Ctr/Year': 'Value (In ₹)',
-                                              'Percentage_Cumulative_Alloted/Cost Ctr/Year': '% total'},
+                filtered_data.rename(columns={'Cumulative_Alloted/Cost Ctr/Year': 'Value (In ₹)','CostctrName':'Name','Cost Ctr':'Cost Center',
+                                              'Percentage_Cumulative_Alloted/Cost Ctr/Year': '%total'},
                                      inplace=True)
                 filtered_data.reset_index(drop=True, inplace=True)
                 filtered_data.index = filtered_data.index + 1
                 filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
-                filtered_transactions = filtered_transactions.sort_values(by='percentage Transcation/costctr/year',
+                filtered_transactions['Cummulative_transactions2'] = len(filtered_transactions)
+                filtered_transactions['Cumulative_transactions/Cost Ctr'] = filtered_transactions.groupby(['Cost Ctr'])['Cost Ctr'].transform('count')
+                filtered_transactions['Cumulative_transactions/Cost Ctr/Year'] = filtered_transactions.groupby(['Cost Ctr'])['Cost Ctr'].transform('count')
+                filtered_transactions['percentage Transcation/Cost Ctr/year'] = filtered_transactions['Cumulative_transactions/Cost Ctr/Year'] / filtered_transactions[
+                    'Cummulative_transactions2'] * 100
+                filtered_transactions = filtered_transactions.sort_values(by='percentage Transcation/Cost Ctr/year',
                                                                           ascending=False)[['Cost Ctr', 'CostctrName',
                                                                                             'Cumulative_transactions/Cost Ctr/Year',
-                                                                                            'percentage Transcation/costctr/year']].drop_duplicates(
+                                                                                            'percentage Transcation/Cost Ctr/year'
+                                                                                            ]].drop_duplicates(
                     subset=['Cost Ctr'], keep='first')
                 filtered_transactions.rename(columns={'Cost Ctr':'Cost Center','CostctrName':'Name',
                                                       'Cumulative_transactions/Cost Ctr/Year': 'Transactions',
-                                                      'percentage Transcation/costctr/year': '% total'},
+                                                      'percentage Transcation/Cost Ctr/year': '% total'},
                                              inplace=True)
+                filtered_transactions.reset_index(drop=True, inplace=True)
+                filtered_transactions.index = filtered_transactions.index + 1
+                filtered_data.rename_axis('S.NO', axis=1, inplace=True)
                 filtered_transactions.reset_index(drop=True, inplace=True)
                 filtered_transactions.index = filtered_transactions.index + 1
                 filtered_transactions.rename_axis('S.NO', axis=1, inplace=True)
                 merged_df = pd.merge(filtered_data, filtered_transactions, on=['Cost Center','Name'])
 
-
             elif selected_category == f'Top 25 {G_L} Transactions':
+                filtered_data['overall_Alloted_Amount'] = filtered_data.groupby(['year'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/G/L'] = filtered_data.groupby(['G/L'])['Amount'].transform('sum')
+                filtered_data['Cumulative_Alloted/G/L/Year'] = filtered_data.groupby(['G/L', 'year'])['Amount'].transform('sum')
+                filtered_data['Percentage_Cumulative_Alloted/G/L'] = (filtered_data['Cumulative_Alloted/G/L/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
+                yearly_total2 = filtered_data.groupby('year')['Amount'].sum().reset_index()
+                yearly_total2.rename(columns={'Amount': 'Total_Alloted_Amount/year'}, inplace=True)
+                filtered_data['Percentage_Cumulative_Alloted/G/L/Year'] = (filtered_data['Cumulative_Alloted/G/L/Year'] / filtered_data[
+                    'overall_Alloted_Amount']) * 100
                 filtered_data = filtered_data.sort_values(by='Cumulative_Alloted/G/L/Year', ascending=False)[
                     ['G/L', 'G/L Name',
                      'Cumulative_Alloted/G/L/Year',
@@ -277,7 +368,11 @@ if st.session_state.upload:
                 filtered_data.reset_index(drop=True, inplace=True)
                 filtered_data.index = filtered_data.index + 1
                 filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
+                filtered_transactions['Cummulative_transactions2'] = len(filtered_transactions)
+                filtered_transactions['Cumulative_transactions/G/L'] = filtered_transactions.groupby(['G/L'])['G/L'].transform('count')
+                filtered_transactions['Cumulative_transactions/G/L/Year'] = filtered_transactions.groupby(['G/L'])['G/L'].transform('count')
+                filtered_transactions['percentage Transcation/G/L/year'] = filtered_transactions['Cumulative_transactions/G/L/Year'] / filtered_transactions[
+                    'Cummulative_transactions2'] * 100
                 filtered_transactions = filtered_transactions.sort_values(by='percentage Transcation/G/L/year',
                                                                           ascending=False)[['G/L', 'G/L Name',
                                                                                             'Cumulative_transactions/G/L/Year',
@@ -296,48 +391,77 @@ if st.session_state.upload:
             else:
                 category = ' '.join(selected_category.split()[2:-1])
                 filtered_data = filtered_data[filtered_data['category'] == category]
+                filtered_transactions = filtered_data.copy()
+                filtered_data['Amount_used/Year2'] = filtered_data.groupby(['Vendor', 'year', 'category'])['Amount'].transform('sum')
+                filtered_data['Yearly_Alloted_Amount\Category2'] = filtered_data.groupby(['category', 'year'])['Amount'].transform('sum')
+                filtered_data['percentage_of_amount/category_used/year2'] = (filtered_data['Amount_used/Year2'] / filtered_data[
+                    'Yearly_Alloted_Amount\Category2']) * 100
                 filtered_transactions = filtered_transactions[filtered_transactions['category'] == category]
-                filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year',
-                                                          ascending=False)[['Vendor','Vendor Name', 'Amount_used/Year',
-                                                                            'percentage_of_amount/category_used/year']]
-                filtered_data.rename(columns={'Amount_used/Year': 'Value (In ₹)','Vendor':'ID','Vendor Name':'Name',
-                                              'percentage_of_amount/category_used/year': '%total'},
+                filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year2',
+                                                          ascending=False)[['Vendor','Vendor Name', 'Amount_used/Year2',
+                                                                            'percentage_of_amount/category_used/year2']]
+                filtered_data = filtered_data.drop_duplicates(subset=['Vendor'], keep='first')
+                filtered_data.rename(columns={'Amount_used/Year2': 'Value (In ₹)','Vendor':'ID','Vendor Name':'Name',
+                                              'percentage_of_amount/category_used/year2': '%total'},
                                      inplace=True)
+
                 filtered_data.reset_index(drop=True, inplace=True)
                 filtered_data.index = filtered_data.index + 1
                 filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
-                filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year',
+                filtered_transactions['Transations/year/Vendor2'] = filtered_transactions.groupby(['Vendor', 'year', 'category'])['Vendor'].transform('count')
+                filtered_transactions['overall_transactions/category/year2'] = filtered_transactions.groupby(['category', 'year'])['category'].transform(
+                    'count')
+                filtered_transactions['percentransations_made/category/year2'] = (filtered_transactions['Transations/year/Vendor2'] / filtered_transactions[
+                    'overall_transactions/category/year2']) * 100
+                filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year2',
                                                                           ascending=False)[
                     ['Vendor','Vendor Name',
-                     'Transations/year/Vendor', 'percentransations_made/category/year']]
+                     'Transations/year/Vendor2', 'percentransations_made/category/year2']]
+                filtered_transactions = filtered_transactions.drop_duplicates(subset=['Vendor'], keep='first')
                 filtered_transactions.rename(columns={'Vendor':'ID','Vendor Name':'Name',
-                                                      'Transations/year/Vendor': 'Transactions',
-                                                      'percentransations_made/category/year': '% total'},
+                                                      'Transations/year/Vendor2': 'Transactions',
+                                                      'percentransations_made/category/year2': '% total'},
                                              inplace=True)
                 filtered_transactions.reset_index(drop=True, inplace=True)  # Reset index here
                 filtered_transactions.index = filtered_transactions.index + 1
                 filtered_transactions.rename_axis('S.NO', axis=1, inplace=True)
                 merged_df = pd.merge(filtered_data, filtered_transactions, on=['ID', 'Name'])
         else:
-            filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year', ascending=False)[
-                ['Vendor','Vendor Name', 'Amount_used/Year', 'percentage_of_amount/category_used/year'
-                 ]]
-            filtered_data.rename(columns={'Amount_used/Year': 'Value (In ₹)','Vendor':'ID','Vendor Name':'Name',
-                                          'percentage_of_amount/category_used/year': '% of total',
-                                          },
+            filtered_data['Amount_used/Year2'] = filtered_data.groupby(['Vendor', 'year'])[
+                'Amount'].transform('sum')
+            filtered_data['Yearly_Alloted_Amount\Category2'] = filtered_data.groupby(['year'])['Amount'].transform('sum')
+            filtered_data['percentage_of_amount/category_used/year2'] = (filtered_data['Amount_used/Year2'] /
+                                                                         filtered_data[
+                                                                             'Yearly_Alloted_Amount\Category2']) * 100
+            filtered_data = filtered_data.sort_values(by='percentage_of_amount/category_used/year2',
+                                                      ascending=False)[['Vendor', 'Vendor Name', 'Amount_used/Year2',
+                                                                        'percentage_of_amount/category_used/year2']]
+            filtered_data = filtered_data.drop_duplicates(subset=['Vendor'], keep='first')
+            filtered_data.rename(columns={'Amount_used/Year2': 'Value (In ₹)', 'Vendor': 'ID', 'Vendor Name': 'Name',
+                                          'percentage_of_amount/category_used/year2': '%total'},
                                  inplace=True)
+
             filtered_data.reset_index(drop=True, inplace=True)
             filtered_data.index = filtered_data.index + 1
             filtered_data.rename_axis('S.NO', axis=1, inplace=True)
-
-            filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year',
+            filtered_transactions['Transations/year/Vendor2'] = \
+            filtered_transactions.groupby(['Vendor', 'year'])['Vendor'].transform('count')
+            filtered_transactions['overall_transactions/category/year2'] = \
+            filtered_transactions['overall_transactions/category/year2'] = \
+            filtered_transactions.groupby(['year'])['category'].transform(
+                'count')
+            filtered_transactions['percentransations_made/category/year2'] = (filtered_transactions[
+                                                                                  'Transations/year/Vendor2'] /
+                                                                              filtered_transactions[
+                                                                                  'overall_transactions/category/year2']) * 100
+            filtered_transactions = filtered_transactions.sort_values(by='percentransations_made/category/year2',
                                                                       ascending=False)[
-                ['Vendor','Vendor Name',
-                 'Transations/year/Vendor','percentransations_made/category/year']]
+                ['Vendor', 'Vendor Name',
+                 'Transations/year/Vendor2', 'percentransations_made/category/year2']]
+            filtered_transactions = filtered_transactions.drop_duplicates(subset=['Vendor'], keep='first')
             filtered_transactions.rename(columns={'Vendor':'ID','Vendor Name':'Name',
-                                                  'Transations/year/Vendor': 'Transactions',
-                                                  'percentransations_made/category/year': '% total'},
+                                                  'Transations/year/Vendor2': 'Transactions',
+                                                  'percentransations_made/category/year2': '% total'},
                                          inplace=True)
             filtered_transactions.reset_index(drop=True, inplace=True)  # Reset index here
             filtered_transactions.index = filtered_transactions.index + 1
@@ -364,33 +488,98 @@ if st.session_state.upload:
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="PO Analysis.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
     with t1:
-        filtered_data = data.copy()
-        st.write("")
+        filtered_df = data.copy()
+        filtered_df['Cost Ctr'] = filtered_df['Cost Ctr'].astype(str)
+        filtered_df['G/L'] = filtered_df['G/L'].astype(str)
+        filtered_df['Vendor'] = filtered_df['Vendor'].astype(str)
+        filtered_df['Cost Ctr'] = filtered_df['Cost Ctr'] + ' - ' + filtered_df[
+            'CostctrName']
+        filtered_df['G/L'] = filtered_df['G/L'] + ' - ' + filtered_df['G/L Name']
+        filtered_df['Vendor'] = filtered_df['Vendor'] + ' - ' + filtered_df['Vendor Name']
+        filtered_df['Cost Ctr'] = filtered_df['Cost Ctr'].astype(str)
+        filtered_df['G/L'] = filtered_df['G/L'].astype(str)
+        filtered_df['Vendor'] = filtered_df['Vendor'].astype(str)
+        c1, c2, c3, c4 = st.columns(4)
+        # Cost Center multiselect
+        options_cost_center = ["All"] + [yr for yr in filtered_df['Cost Ctr'].unique() if yr != "All"]
+        selected_cost_centers = c1.multiselect("Select Cost Centers", options_cost_center, default=["All"])
 
+        # Filter the DataFrame based on selected Cost Centers
+        if "All" in selected_cost_centers:
+            filtered_df2 = filtered_df
+        else:
+            filtered_df2 = filtered_df[filtered_df['Cost Ctr'].isin(selected_cost_centers)]
 
+        # G/L multiselect
+        options_gl = ["All"] + [yr for yr in filtered_df2['G/L'].unique() if yr != "All"]
+        selected_gl = c2.multiselect("Select G/L", options_gl, default=["All"])
 
-        # Layout the cards
+        # Filter the DataFrame based on selected G/L
+        if "All" in selected_gl:
+            filtered_df1 = filtered_df2
+        else:
+            filtered_df1 = filtered_df2[filtered_df2['G/L'].isin(selected_gl)]
+
+        # Vendor multiselect
+        options_vendor = ["All"] + [yr for yr in filtered_df1['Vendor'].unique() if yr != "All"]
+        selected_vendor = c3.multiselect("Select Vendor", options_vendor, default=["All"])
+
+        # Filter the DataFrame based on selected Vendor
+        if "All" in selected_vendor:
+            filtered_data = filtered_df1
+        else:
+            filtered_data = filtered_df1[filtered_df1['Vendor'].isin(selected_vendor)]
+
+        # dynamic_filters = DynamicFilters(filtered_df, filters=['Cost Ctr', 'G/L'])
+        # dynaic_filters.display_filters()
+        # filtered_data = dynammic_filters.filter_df()
+        # # filtered_data = filtered_df.copy()
+        # filtered_data['Amount'] = filtered_data['Amount'].round()
+        # df['G/L'] = df['G/L'].astype(str)
+        # df['G/L'] = df['G/L'].apply(lambda x: str(x) if isinstance(x, str) else '')
+        # df['G/L'] = df['G/L'].apply(lambda x: re.sub(r'\..*', '', x))
+        filtered_data['Amount'] = filtered_data['Amount'].astype(int)
         card1, card2 = st.columns(2)
-
+        for col in ['Cost Ctr', 'G/L', 'Vendor']:
+            filtered_data[col] = filtered_data[col].str.split('-').str[0]
         with card1:
-            Total_Amount_Alloted = filtered_data['cumulative_Alloted_Amount'].iloc[
-                0]  # Assuming filtered_data is defined
-            # Calculate percentage of yearly allotted amount per category
+            Total_Amount_Alloted = filtered_data['Amount'].sum()
+
+            # Check if the length of Total_Amount_Alloted is greater than 5
+            if len(str(Total_Amount_Alloted)) > 5:
+                # Get the integer part of the total amount
+                integer_part = int(Total_Amount_Alloted)
+                # Calculate the length of the integer part
+                integer_length = len(str(integer_part))
+
+                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
+                if integer_length > 5 and integer_length <= 7:
+                    Total_Amount_Alloted /= 100000
+                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
+                # Divide by 1 crore if the integer length is greater than 7
+                elif integer_length > 7:
+                    Total_Amount_Alloted /= 10000000
+                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
+                else:
+                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+            else:
+                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+
+            # Display the total amount spent
             st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent (in Crores)</h3>",
+                f"<h3 style='text-align: center; font-size: 25px;'>Total Amount Spent </h3>",
                 unsafe_allow_html=True
             )
-            Total_alloted = Total_Amount_Alloted / 10000000
             st.markdown(
                 f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f}crores</h2>"
+                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
                 "</div>",
                 unsafe_allow_html=True
             )
             st.write("")
 
         with card2:
-            Total_Transaction = filtered_data['Cummulative_transactions'].iloc[0]  # Assuming filtered_data is defined
+            Total_Transaction = filtered_data['Payable req.no'].count()  # Assuming filtered_data is defined
             st.markdown(
                 f"<h3 style='text-align: center; font-size: 25px;'>Total Count Of Transactions</h3>",
                 unsafe_allow_html=True
@@ -401,693 +590,297 @@ if st.session_state.upload:
                 "</div>",
                 unsafe_allow_html=True
             )
+        data = filtered_data.copy()
+        data.reset_index(drop=True, inplace=True)
+        data.index += 1  # Start index from 1
 
-
-        @st.cache_resource(show_spinner=False)
-        def line_plot_overall_transactions(data, category, years, width=500, height=300):
-            # Convert years to strings
-            years = [
-
-                (year) for year in years]
-
-            # Filter data for the selected category and years
-            filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
-
-            # Create a DataFrame with all years in the range
-            all_years_data = pd.DataFrame({'year': years})
-
-            # Merge with filtered_data to retain only the available data points
-            filtered_data = pd.merge(all_years_data, filtered_data, on='year', how='left')
-
-            # Interpolate missing values to create a continuous line
-            filtered_data['overall_transactions/category/year'] = filtered_data[
-                'overall_transactions/category/year'].interpolate()
-            filtered_data['year'] = filtered_data['year'].astype(str)
-
-            # Plot the line graph
-            fig = px.line(filtered_data, x='year', y='overall_transactions/category/year',
-                          title='Transactions Count',
-                          labels={'year': 'Year', 'overall_transactions/category/year': 'Transactions'},
-                          markers=True)
-
-            # Set mode to 'lines+markers' for all points
-            fig.update_traces(mode='lines+markers')
-
-            # Update layout with width and height
-            fig.update_layout(width=width, height=height)
-
-            # Remove decimal values from y-axis labels
-            fig.update_yaxes(tickformat=".0f")
-
-            return fig
-
-
-        @st.cache_resource(show_spinner=False)
-        def line_plot_used_amount(data, category, years, width=500, height=300):
-            # Convert 'year' column to string in both dataframes
-            years = [(year) for year in years]
-
-            # Filter data for the selected category and years
-            filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
-            filtered_data['year'] = filtered_data['year'].astype(str)
-
-            # Create a DataFrame with all years in the range
-            all_years_data = pd.DataFrame({'year': years})
-            all_years_data['year'] = all_years_data['year'].astype(str)
-            # Merge with filtered_data to retain only the available data points
-            filtered_data = pd.merge(all_years_data, filtered_data, on='year', how='left')
-            filtered_data['year'] = filtered_data['year'].astype(str)
-            # Interpolate missing values to create a continuous line
-            filtered_data['used_amount_crores'] = filtered_data['used_amount_crores'].interpolate()
-            filtered_data['year'] = filtered_data['year'].astype(str)
-
-            # Plot the line graph
-            fig = px.line(filtered_data, x='year', y='used_amount_crores',text ='used_amount_crores',
-                          title=f'Amount Spent (in Crores)',
-                          labels={'year': 'Year', 'used_amount_crores': 'Amount'},
-                          markers=True)
-
-            # Set mode to 'lines+markers' and label the points above the markers
-            fig.update_traces(mode='lines+markers')
-
-            # Update layout with width and height
-            fig.update_layout(width=width, height=height)
-
-            return fig
-
-
-        years = (data['year'].unique().astype(str))
+        years = (data['year'].unique())
         years_df = pd.DataFrame({'year': data['year'].unique()})
-        filtered_years = (data['year'].unique().astype(str))
-        filtered_data = (data[data['year'].isin(filtered_years)].copy().astype(str))
+        filtered_years = (data['year'].unique())
+        filtered_data = (data[data['year'].isin(filtered_years)].copy())
 
         st.write("## Employee Reimbursement Trend")
-        col1, col2= st.columns(2)
+
+        c2,col1, col2,c5 = st.columns([1,4,4,1])
+        c2.write("")
+        c5.write("")
         fig_employee = line_plot_overall_transactions(data, "Employee",years_df['year'])
-        fig_employee2 = line_plot_used_amount(data, "Employee",years_df['year'])
+        fig_employee2 = line_plot_used_amount(data, "Employee", years)
         col2.plotly_chart(fig_employee)
         col1.plotly_chart(fig_employee2)
 
         # Line plot for category "Korean Expats"
         st.write("## Korean Expats Reimbursement Trend")
-        co1, co2= st.columns(2)
+        c2,co1, co2,c5 = st.columns([1,4,4,1])
         fig_korean_expats = line_plot_overall_transactions(data, "Korean Expats", years_df['year'])
-        fig_korean_expats1 = line_plot_used_amount(data, "Korean Expats", years_df['year'])
+        fig_korean_expats1 = line_plot_used_amount(data, "Korean Expats", years)
+        c2.write("")
+        c5.write("")
         co2.plotly_chart(fig_korean_expats)
         co1.plotly_chart(fig_korean_expats1)
 
         # Line plot for category "Vendor"
         st.write("## Vendor Payment Trend")
-        c1,c2=st.columns(2)
+        co2,c1, c2,c5 = st.columns([1,4,4,1])
+        co2.write("")
+        c5.write("")
         fig_vendor = line_plot_overall_transactions(data, "Vendor",years_df['year'])
-        fig_vendor1 = line_plot_used_amount(data, "Vendor",years_df['year'])
+        fig_vendor1 = line_plot_used_amount(data, "Vendor", years)
         c2.plotly_chart(fig_vendor)
         c1.plotly_chart(fig_vendor1)
 
-
         # Line plot for category "Others"
         st.write("## Other Payment Trend")
-        cl1,cl2=st.columns(2)
+        c2,cl1, cl2,c5 = st.columns([1,4,4,1])
         fig_others = line_plot_overall_transactions(data, "Others",years_df['year'])
-        fig_others1 = line_plot_used_amount(data, "Others",years_df['year'])
+        fig_others1 = line_plot_used_amount(data, "Others", years)
         cl2.plotly_chart(fig_others)
         cl1.plotly_chart(fig_others1)
     with t3:
-
         # Define the functions
-        def display_duplicate_invoices(exceptions):
-            dfe = exceptions.copy()
-            dfe = dfe[
-                ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number',"Text", "Cost Ctr", 'G/L', 'Document No',
-                 'Doc. Date', 'Pstng Date', 'Amount','year']]
-
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center"},
-                       inplace=True)
-            c1, c2, c3, c4,c5 = st.columns(5)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            # Sorting by 'Invoice Number'
-            dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-            dfe[['Name','Amount','Doc. Date','Invoice Number',"ID"]] = dfe[['Name','Amount','Doc. Date','Invoice Number',"ID"]].astype(str)
-            selected_option = c2.selectbox("Select Duplicate type", ["1", "2","3"], index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "1":
-                dfe = dfe[dfe.duplicated(subset=['Doc. Date', 'ID', 'Amount'], keep=False)]
-            elif selected_option == "2":
-                grouped_df = dfe.groupby(['Cost Center', 'Amount']).filter(lambda group: len(group) > 1)
-
-                # Step 4: Compare values in column 'Invoice Number'
-                def compare_strings(s1, s2):
-                    common_chars = set(s1) & set(s2)
-                    return len(common_chars) >= 0.7 * min(len(s1), len(s2))
-
-                dfe = grouped_df[grouped_df.apply(
-                    lambda row: compare_strings(row['Invoice Number'], grouped_df['Invoice Number'].iloc[0]), axis=1)]
-                dfe = dfe.groupby(['Cost Center', 'Amount']).filter(lambda group: len(group) > 1)
-
-                dfe.reset_index(drop=True, inplace=True)
-            elif selected_option == "3":
-                dfe = dfe[dfe.duplicated(subset=['Invoice Number'], keep=False)]
-                dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            dfe['Amount'] = pd.to_numeric(dfe['Amount'], errors='coerce')
-            dfe['Amount'] = dfe['Amount'].astype(int)
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with Duplicate Invoices</h2>",
-                unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write("<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Invoice Number</div>", unsafe_allow_html=True)
-            else:
-                 c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
-                 with card1:
-                     Total_Amount_Alloted = dfe['Amount'].sum()
-                     # Calculate percentage of yearly allotted amount per category
-
-                     st.markdown(
-                         f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure (in Crores)</h3>",
-                         unsafe_allow_html=True
-                     )
-                     Total_alloted = Total_Amount_Alloted / 10000000
-                     st.markdown(
-                         f"<div style='{card1_style}'>"
-                         f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f}crores</h2>"
-                         "</div>",
-                         unsafe_allow_html=True
-                     )
-                     st.write("")
-
-                 with card2:
-                     Total_Transaction = len(dfe)
-                     st.markdown(
-                         f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                         unsafe_allow_html=True
-                     )
-                     st.markdown(
-                         f"<div style='{card2_style}'>"
-                         f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                         "</div>",
-                         unsafe_allow_html=True
-                     )
-                     st.write("")
-                     # Display the DataFrame
-
-                 c1, c2, c3 = st.columns([1, 8, 1])
-                 dfe = dfe.drop(columns=['year'])
-                 dfe['Amount'] = dfe['Amount'].round()
-                 dfe = dfe.sort_values(by=['Name','Amount','Doc. Date'])
-                 dfe.reset_index(drop=True, inplace=True)
-                 dfe.index += 1  # Start index from 1
-                 c2.write(dfe)
-                 excel_buffer = BytesIO()
-                 dfe.to_excel(excel_buffer, index=False)
-                 excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-            # Convert Excel buffer to base64
-                 excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-            # Download link for Excel file within a Markdown
-                 download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Duplicate Invoice.xlsx">Download Excel file</a>'
-                 st.markdown(download_link, unsafe_allow_html=True)
-        def same_approval(exceptions):
-            dfe = exceptions.copy()
-            dfe = dfe[dfe['Created'] == dfe['HOG Approval by']]
-            dfe = dfe[
-                ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','text', "Cost Ctr", 'G/L', 'Document No',
-                 'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                                'Created': 'Created by'},
-                       inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with Same Creator ID and HOG Approval ID</h2>",unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write("<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID and HOG Approval ID</div>", unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-                    # Calculate percentage of yearly allotted amount per category
-
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    Total_alloted = Total_Amount_Alloted
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c1, c2, c3 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe['Amount'] = dfe['Amount'].round()
-                dfe = dfe.drop(columns=['year'])
-                c2.write(dfe)
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-            # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-            # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Same CreatoR_HOG Approval ID.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-        def same_Creator_Verified_HOG(exceptions):
-            dfe = exceptions.copy()
-            dfe = dfe[(dfe['Created'] == dfe['Verified by']) & (dfe['Verified by'] == dfe['HOG Approval by'])]
-            dfe = dfe[
-                ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text',"Cost Ctr", 'G/L', 'Document No',
-                 'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
-            dfe['Document No'] = dfe['Document No'].astype(str)
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-            dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-            dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                                'Created': 'Created by'},
-                       inplace=True)
-            c1, c2, c3, c4 = st.columns(4)
-            options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-            selected_option = c1.selectbox("Select an Year", options, index=0)
-            # Filter the DataFrame based on the selected option
-            if selected_option == "All":
-                dfe = dfe  # Return the entire DataFrame
-            else:
-                dfe = dfe[dfe['year'] == selected_option]
-            dfe.reset_index(drop=True, inplace=True)
-            dfe.index += 1  # Start index from 1
-            st.write(
-                "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with same Creator ID , Verified ID and HOG Approval</h2>",unsafe_allow_html=True)
-            st.write("")
-            if dfe.empty:
-                st.write("<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID, Verified ID and HOG Approval ID</div>", unsafe_allow_html=True)
-            else:
-                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                with card1:
-                    Total_Amount_Alloted = dfe['Amount'].sum()
-                    # Calculate percentage of yearly allotted amount per category
-
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                        unsafe_allow_html=True
-                    )
-                    Total_alloted = Total_Amount_Alloted
-                    st.markdown(
-                        f"<div style='{card1_style}'>"
-                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                with card2:
-                    Total_Transaction = len(dfe)
-                    st.markdown(
-                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        f"<div style='{card2_style}'>"
-                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                        "</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.write("")
-                c11,c22,c33 = st.columns([1, 8, 1])
-                # Display the DataFrame
-                dfe = dfe.drop(columns=['year'])
-                dfe['Amount'] = dfe['Amount'].round()
-                c22.write(dfe)
-                excel_buffer = BytesIO()
-                dfe.to_excel(excel_buffer, index=False)
-                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-            # Convert Excel buffer to base64
-                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-            # Download link for Excel file within a Markdown
-                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same_Creator_Verified_HOG Approval ID.xlsx">Download Excel file</a>'
-                st.markdown(download_link, unsafe_allow_html=True)
-
-        def same_Creator_Verified_HOGno(exceptions):
-                dfe = exceptions.copy()
-                dfe = dfe[
-                          (dfe['Created'] == dfe['Verified by']) & (dfe['HOG Approval by'].isna())]
-                dfe = dfe[
-                    ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
-                     'Document No',
-                     'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
-                dfe['Document No'] = dfe['Document No'].astype(str)
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-                dfe.rename(
-                    columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                             'Created': 'Created by'},
-                    inplace=True)
-                c1, c2, c3, c4 = st.columns(4)
-                options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-                selected_option = c1.selectbox("Select an Year", options, index=0)
-                # Filter the DataFrame based on the selected option
-                if selected_option == "All":
-                    dfe = dfe  # Return the entire DataFrame
-                else:
-                    dfe = dfe[dfe['year'] == selected_option]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                st.write(
-                    "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with same Creator ID , Verified ID  and HOG Approval Is None</h2>",
-                    unsafe_allow_html=True)
-                st.write("")
-                if dfe.empty:
-                    st.write(
-                        "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID, Verified ID and With No HOG Approval</div>",
-                        unsafe_allow_html=True)
-                else:
-                    c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-                        # Calculate percentage of yearly allotted amount per category
-
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        Total_alloted = Total_Amount_Alloted
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    with card2:
-                        Total_Transaction = len(dfe)
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card2_style}'>"
-                            f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    c11, c22, c33 = st.columns([1, 8, 1])
-                    # Display the DataFrame
-                    dfe['Amount'] = dfe['Amount'].round()
-                    dfe = dfe.drop(columns=['year'])
-                    c22.write(dfe)
-                    excel_buffer = BytesIO()
-                    dfe.to_excel(excel_buffer, index=False)
-                    excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                    # Convert Excel buffer to base64
-                    excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                    # Download link for Excel file within a Markdown
-                    download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same_Creator_Verified_NoHOG.xlsx">Download Excel file</a>'
-                    st.markdown(download_link, unsafe_allow_html=True)
-
-        def Creator_Verified_HOGno(exceptions):
-                dfe = exceptions.copy()
-                dfe = dfe[(~dfe['Created'].isna()) & (~dfe['Verified by'].isna()) & dfe['HOG Approval by'].isna()]
-
-                dfe = dfe[
-                    ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
-                     'Document No',
-                     'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
-                dfe['Document No'] = dfe['Document No'].astype(str)
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-                dfe.rename(
-                    columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                             'Created': 'Created by'},
-                    inplace=True)
-                c1, c2, c3, c4 = st.columns(4)
-                options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-                selected_option = c1.selectbox("Select an Year", options, index=0)
-                # Filter the DataFrame based on the selected option
-                if selected_option == "All":
-                    dfe = dfe  # Return the entire DataFrame
-                else:
-                    dfe = dfe[dfe['year'] == selected_option]
-                options = ["All"] + [gl for gl in dfe['G/L'].unique() if gl != "All"]
-                selected_option = c2.selectbox("Select a G/L", options, index=0)
-                # Filter the DataFrame based on the selected option
-                if selected_option == "All":
-                    dfe = dfe  # Return the entire DataFrame
-                else:
-                    dfe = dfe[dfe['G/L'] == selected_option]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                st.write(
-                    "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With No HOG Approval</h2>",
-                    unsafe_allow_html=True)
-                st.write("")
-                if dfe.empty:
-                    st.write(
-                        "<div style='text-align: center; font-weight: bold; color: black;'>No entries Without HOG Approval</div>",
-                        unsafe_allow_html=True)
-                else:
-                    c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-                        # Calculate percentage of yearly allotted amount per category
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        Total_alloted = Total_Amount_Alloted
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    with card2:
-                        Total_Transaction = len(dfe)
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card2_style}'>"
-                            f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    c11, c22, c33 = st.columns([1, 8, 1])
-                    # Display the DataFrame
-                    dfe = dfe.drop(columns=['year'])
-                    dfe['Amount'] = dfe['Amount'].round()
-                    c22.write(dfe)
-                    excel_buffer = BytesIO()
-                    dfe.to_excel(excel_buffer, index=False)
-                    excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                    # Convert Excel buffer to base64
-                    excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                    # Download link for Excel file within a Markdown
-                    download_link = f'<a href="data:file/xls;base64,{excel_b64}" download=" Without HOG Approval.xlsx">Download Excel file</a>'
-                    st.markdown(download_link, unsafe_allow_html=True)
-        def Creator_HOG(exceptions):
-                dfe = exceptions.copy()
-                dfe = dfe[
-                          (dfe['Created'] == dfe['HOG Approval by'])]
-
-                dfe = dfe[
-                    ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
-                     'Document No',
-                     'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by','year']]
-                dfe['Document No'] = dfe['Document No'].astype(str)
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-                dfe.rename(
-                    columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                             'Created': 'Created by'},
-                    inplace=True)
-                c1, c2, c3, c4 = st.columns(4)
-                options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-                selected_option = c1.selectbox("Select an Year", options, index=0)
-                # Filter the DataFrame based on the selected option
-                if selected_option == "All":
-                    dfe = dfe  # Return the entire DataFrame
-                else:
-                    dfe = dfe[dfe['year'] == selected_option]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                st.write(
-                    "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With Same CreatorID and HOG ApprovalID</h2>",
-                    unsafe_allow_html=True)
-                st.write("")
-                if dfe.empty:
-                    st.write(
-                        "<div style='text-align: center; font-weight: bold; color: black;'>No entries With Same CreatorID and HOG ApprovalID</div>",
-                        unsafe_allow_html=True)
-                else:
-                    c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-                        # Calculate percentage of yearly allotted amount per category
-
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        Total_alloted = Total_Amount_Alloted
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    with card2:
-                        Total_Transaction = len(dfe)
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card2_style}'>"
-                            f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    c11, c22, c33 = st.columns([1, 8, 1])
-                    # Display the DataFrame
-                    dfe['Amount'] = dfe['Amount'].round()
-                    dfe = dfe.drop(columns=['year'])
-                    c22.write(dfe)
-                    excel_buffer = BytesIO()
-                    dfe.to_excel(excel_buffer, index=False)
-                    excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                    # Convert Excel buffer to base64
-                    excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                    # Download link for Excel file within a Markdown
-                    download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Same CreatorID and HOG ApprovalID.xlsx">Download Excel file</a>'
-                    st.markdown(download_link, unsafe_allow_html=True)
-        def same_Creator_Verified(exceptions):
-                dfe = exceptions.copy()
-                dfe = dfe[
-                          (dfe['Created'] == dfe['Verified by'])]
-                dfe = dfe[
-                    ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number','Text', "Cost Ctr", 'G/L',
-                     'Document No','year',
-                     'Doc. Date', 'Pstng Date', 'Amount', 'Created', 'Verified by', 'HOG Approval by']]
-                dfe['Document No'] = dfe['Document No'].astype(str)
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-                dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-                dfe.rename(
-                    columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                             'Created': 'Created by'},
-                    inplace=True)
-                c1, c2, c3, c4 = st.columns(4)
-                options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-                selected_option = c1.selectbox("Select an Year", options, index=0)
-                # Filter the DataFrame based on the selected option
-                if selected_option == "All":
-                    dfe = dfe  # Return the entire DataFrame
-                else:
-                    dfe = dfe[dfe['year'] == selected_option]
-                dfe.reset_index(drop=True, inplace=True)
-                dfe.index += 1  # Start index from 1
-                st.write(
-                    "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With Same Creator ID And Verified ID</h2>",
-                    unsafe_allow_html=True)
-                st.write("")
-                if dfe.empty:
-                    st.write(
-                        "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID And Verified ID </div>",
-                        unsafe_allow_html=True)
-                else:
-                    c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-                    with card1:
-                        Total_Amount_Alloted = dfe['Amount'].sum()
-                        # Calculate percentage of yearly allotted amount per category
-
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                            unsafe_allow_html=True
-                        )
-                        Total_alloted = Total_Amount_Alloted
-                        st.markdown(
-                            f"<div style='{card1_style}'>"
-                            f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    with card2:
-                        Total_Transaction = len(dfe)
-                        st.markdown(
-                            f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            f"<div style='{card2_style}'>"
-                            f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                            "</div>",
-                            unsafe_allow_html=True
-                        )
-                        st.write("")
-                    c11, c22, c33 = st.columns([1, 8, 1])
-                    # Display the DataFrame
-                    dfe['Amount'] = dfe['Amount'].round()
-                    dfe = dfe.drop(columns=['year'])
-                    c22.write(dfe)
-                    excel_buffer = BytesIO()
-                    dfe.to_excel(excel_buffer, index=False)
-                    excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-                    # Convert Excel buffer to base64
-                    excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-                    # Download link for Excel file within a Markdown
-                    download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="same Creator ID And Verified ID.xlsx">Download Excel file</a>'
-                    st.markdown(download_link, unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        option = c1.selectbox("Select an option", ["Duplicate Invoices","No HOG Approval","Same Creator and Verified ID","Same Creator and HOG ID","Same Creator,Verified and HOG ID","Same Creator, Verified and NO HOG Approval"],
-                                      index=0)
-        if option == "Duplicate Invoices":
+        c1, c42, c3, c4 = st.columns(4)
+        option = c1.selectbox("Select an option",
+                              ["Duplicate Exceptions", "No approver(HOD_HOG)","Creator_Verifier_SAME",
+                               "Creator_Verified_SAME_NO Approver",
+                               "Creator_Approver(HOD_HOD)_SAME", "Creator_Verifier_Approver(HOD_HOD)_SAME",
+                                "Holiday Transactions", "Created_verified on Holidays"],
+                              index=0)
+        c42.write("")
+        c3.write("")
+        c4.write("")
+        if option == "Duplicate Exceptions":
             display_duplicate_invoices(exceptions)
-        elif option == "Same Creator,Verified and HOG ID":
-            same_Creator_Verified_HOG(exceptions)
-        elif option == "Same Creator, Verified and NO HOG Approval":
+        elif option == "Creator_Verified_SAME_NO Approver":
             same_Creator_Verified_HOGno(exceptions)
-        elif option == "No HOG Approval":
+        elif option == "No approver(HOD_HOG)":
             Creator_Verified_HOGno(exceptions)
-        elif option == "Same Creator and Verified ID":
+        elif option == "Creator_Verifier_SAME":
             same_Creator_Verified(exceptions)
-        elif option == "Same Creator and HOG ID":
+        elif option == "Creator_Approver(HOD_HOD)_SAME":
             Creator_HOG(exceptions)
+        elif option == "Creator_Verifier_Approver(HOD_HOD)_SAME":
+            same_Creator_Verified_HOG(exceptions)
+        elif option == "Holiday Transactions":
+            Approval_holidays(exceptions)
+        elif option == "Created_verified on Holidays":
+            Pstingverified_holidays(exceptions)
+    with t4:
+        t41, t42, t43, t44 = st.tabs(["Factor 1", "Factor 2", "Factor 3", "Factor 4"])
+
+        with t41:
+            def ChangeWidgetFontSize(wgt_txt, wch_font_size='12px'):
+                htmlstr = """<script>var elements = window.parent.document.querySelectorAll('*'), i;
+                                for (i = 0; i < elements.length; ++i) { if (elements[i].innerText == |wgt_txt|) 
+                                    { elements[i].style.fontSize='""" + wch_font_size + """';} } </script>  """
+
+                htmlstr = htmlstr.replace('|wgt_txt|', "'" + wgt_txt + "'")
+                components.html(f"{htmlstr}", height=0, width=0)
+
+
+            # Renaming columns in the DataFrame
+            radio.rename(
+                columns={
+                    'Vendor Name': 'Name',
+                    'Pstng Date' :'Posting Date',
+                    'Type': "Doc.Type",
+                    'Vendor': "Reimbursement ID",
+                    "Cost Ctr": "Cost Center",
+                    'Doc. Date': 'Document Date',
+                    "Verified by": 'Verifier',
+                    'Created': 'Creator',
+                    'year':'Year'
+                },
+                inplace=True
+            )
+
+
+            radio = radio[['Payable req.no', 'Doc.Type', 'Reimbursement ID', 'Amount', 'Document Date', 'Name','Year',
+                           'Invoice Number', 'Text', 'Cost Center', 'G/L', 'Document No',
+                           'Posting Date', 'Creator', 'Verifier', 'HOG Approval by', 'category',
+                           'Reference invoice', 'CostctrName', 'G/L Name', 'Profit Ctr',
+                           'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
+                           'Time', 'Updated at', 'Reason for Rejection', 'Verified at',
+                           'Reference document', 'Adv.doc year',
+                           'Request no (Advance mulitple selection)', 'Invoice Reference Number',
+                           'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
+                           'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
+                           'On', 'Updated on', 'Verified on',
+                           'HOG Approval on', 'Clearing date']]
+            radio['Document No'] = radio['Document No'].astype(str)
+            radio['Document No'] = radio['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
+            radio['Document No'] = radio['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
+
+
+
+
+            columns_list = [
+                'Reimbursement ID', 'Amount', "Document Date",
+                "Cost Center", 'G/L', 'Invoice Number', 'Text'
+            ]
+
+            c11, c2, c3, c4 = st.columns(4)
+            options = ["All"] + [yr for yr in radio['Year'].unique() if yr != "All"]
+            selected_option = c11.selectbox("Choose an Year", options, index=0)
+            # Filter the DataFrame based on the selected option
+            if selected_option == "All":
+                radio = radio  # Return the entire DataFrame
+
+
+            else:
+                radio = radio[radio['Year'] == selected_option]
+
+            # Assuming 'radio' is your DataFrame
+
+            # Function to filter DataFrame for duplicate values based on selected checkboxes
+
+            def filter_dataframe(radio, columns_list, dfholiday):
+                checkbox_states = {}
+                cols = st.columns(len(columns_list))
+
+                for i, col in enumerate(cols):
+                    with col:
+                        checkbox_states[columns_list[i]] = st.checkbox(f"{columns_list[i]}", key=i)
+
+                columns_to_check = [column_name for column_name, is_checked in checkbox_states.items() if is_checked]
+
+                col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+                with col1:
+                    coln_plus_1 = st.checkbox("70% SIMILAR INVOICE", key='coln_plus_1')
+                with col2:
+                    coln_plus_2 = st.checkbox("Holiday Transactions", key='coln_plus_2')
+
+                filtered_df = radio.copy()
+                if coln_plus_2:
+                    filtered_df = filtered_df[filtered_df['Posting Date'].isin(dfholiday['date'])]
+                    filtered_df = filtered_df.sort_values(by=['Reimbursement ID', "Cost Center", 'Amount'])
+                    filtered_df.reset_index(drop=True, inplace=True)
+                    filtered_df.index += 1
+                elif coln_plus_1:
+                    filtered_df = filtered_df[filtered_df.duplicated(subset='Amount', keep=False)]
+
+                    def compare_strings(s1, s2):
+                        min_length = min(len(s1), len(s2))
+
+                        for i in range(min_length):
+                            if s1[i] != s2[i]:
+                                return False
+                        if len(s1) > min_length:
+                            return s1[min_length:].isspace()
+                        elif len(s2) > min_length:
+                            return s2[min_length:].isspace()
+
+                        return True
+
+                    filtered_df = filtered_df.sort_values(by=['Reimbursement ID', "Cost Center", 'Amount'])
+                    filtered_df.reset_index(drop=True, inplace=True)
+                    filtered_df.index += 1
+                elif columns_to_check:
+                    filtered_df = filtered_df[filtered_df.duplicated(subset=columns_to_check, keep=False)]
+                    if 'Reimbursement ID' not in columns_to_check and 'Cost Center' not in columns_to_check:
+                        sort_columns = columns_to_check + ['Reimbursement ID', 'Cost Center']
+                    elif 'Reimbursement ID' in columns_to_check and 'Cost Center' not in columns_to_check:
+                        sort_columns = columns_to_check + ['Cost Center']
+                    elif 'Cost Center' in columns_to_check and 'Reimbursement ID' not in columns_to_check:
+                        sort_columns = columns_to_check + ['Reimbursement ID']
+                    else:
+                        sort_columns = columns_to_check
+
+                    filtered_df = filtered_df.sort_values(by=sort_columns)
+                    filtered_df.reset_index(drop=True, inplace=True)
+                    filtered_df.index += 1
+                return filtered_df, ', '.join(columns_to_check)
+
+
+            filtered_df, columns_names = filter_dataframe(radio, columns_list, dfholiday)
+            if filtered_df.empty:
+                st.write(
+                    "<div style='text-align: center; font-weight: bold; color: black;'>No entries</div>",
+                    unsafe_allow_html=True)
+            else:
+
+                st.markdown(
+                    f"<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES with SAME {columns_names}</h2>",
+                    unsafe_allow_html=True)
+
+                c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
+                with card1:
+                    Total_Amount_Alloted = filtered_df['Amount'].sum()
+
+                    # Check if the length of Total_Amount_Alloted is greater than 5
+                    if len(str(Total_Amount_Alloted)) > 5:
+                        # Get the integer part of the total amount
+                        integer_part = int(Total_Amount_Alloted)
+                        # Calculate the length of the integer part
+                        integer_length = len(str(integer_part))
+                        
+
+                        # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
+                        if integer_length > 5 and integer_length <= 7:
+                            Total_Amount_Alloted /= 100000
+                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
+                        # Divide by 1 crore if the integer length is greater than 7
+                        elif integer_length > 7:
+                            Total_Amount_Alloted /= 10000000
+                            amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
+                        else:
+                            amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+                    else:
+                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+
+                    # Display the total amount spent
+                    st.markdown(
+                        f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f"<div style='{card1_style}'>"
+                        f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+
+                with card2:
+                    Total_Transaction = len(filtered_df)
+                    st.markdown(
+                        f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f"<div style='{card2_style}'>"
+                        f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    st.write("")
+                c11, c522, c33 = st.columns([1, 8, 1])
+
+                c522.write("")
+                filtered_df1 = filtered_df.copy()
+                filtered_df1['Amount'] = filtered_df1['Amount'].round()
+                c522.write(
+                    filtered_df1[['Payable req.no', 'Doc.Type', 'Reimbursement ID', 'Amount', 'Document Date', 'Name',
+                                  'Invoice Number', 'Text', 'Cost Center', 'G/L', 'Document No',
+                                  'Posting Date', 'Creator', 'Verifier', 'HOG Approval by']])
+                filename = f"SAME {columns_names}.xlsx"
+                filtered_df.reset_index(drop=True, inplace=True)
+                filtered_df.index += 1  # Start index from 1
+                excel_buffer = BytesIO()
+                filtered_df.to_excel(excel_buffer, index=False)
+                excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
+                # Convert Excel buffer to base64
+                excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
+
+                download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="{filename}">Download Excel file</a>'
+                st.markdown(download_link, unsafe_allow_html=True)
+
+
+
+
+
+
+
+
+
+
+
