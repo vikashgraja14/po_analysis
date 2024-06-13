@@ -1217,4 +1217,4 @@ def Pstingverified_holidays(exceptions):
         # Download link for Excel file within a Markdown
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Created_verified on Holidays.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
-
+#https://www.skyfilabs.com/project-ideas/latest-projects-based-on-renewable-energy
