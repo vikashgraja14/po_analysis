@@ -840,7 +840,7 @@ if st.session_state.upload:
             #
             # with col2:
             #     coln_plus_2 = st.checkbox("Holiday Transactions", key='coln_plus_2')
-
+#https://stackoverflow.com/questions/11541154/checking-images-for-similarity-with-opencv
 
 
 
