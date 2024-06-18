@@ -75,6 +75,9 @@ def process_data(files):
     df['G/L'] = df['G/L'].apply(lambda x: re.sub(r'\..*', '', x))
     df.reset_index(drop=True, inplace=True)
     return df
+
+
+
 @st.cache_resource(show_spinner=False)
 def line_plot_overall_transactions(data, category, years, width=400, height=300):
     filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
@@ -188,7 +191,7 @@ card2_style = """
              margin-left: 50px; /* Set left margin to auto */
              # margin-right: auto; /* Set right margin to auto */
          """
-
+@st.cache_resource(show_spinner=False)
 def display_duplicate_invoices(exceptions):
     dfe = exceptions.copy()
     dfe['Document No'] = dfe['Document No'].astype(str)
@@ -348,7 +351,7 @@ def display_duplicate_invoices(exceptions):
 
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="{filename}">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
-
+@st.cache_resource(show_spinner=False)
 def same_Creator_Verified_HOG(exceptions):
     dfe = exceptions.copy()
     dfe = dfe[(dfe['Created'] == dfe['Verified by']) & (dfe['Verified by'] == dfe['HOG Approval by'])]
@@ -468,7 +471,7 @@ def same_Creator_Verified_HOG(exceptions):
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Verifier_Approver(HOD_HOD)_SAME.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
 
-
+@st.cache_resource(show_spinner=False)
 def same_Creator_Verified_HOGno(exceptions):
     dfe = exceptions.copy()
     # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
@@ -584,7 +587,7 @@ def same_Creator_Verified_HOGno(exceptions):
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Verifier_SAME_NO APPROVER.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
 
-
+@st.cache_resource(show_spinner=False)
 def Creator_Verified_HOGno(exceptions):
     dfe = exceptions.copy()
     # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
@@ -706,7 +709,7 @@ def Creator_Verified_HOGno(exceptions):
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="No approver(HOD_HOG).xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
 
-
+@st.cache_resource(show_spinner=False)
 def Creator_HOG(exceptions):
     dfe = exceptions.copy()
     # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
@@ -823,7 +826,7 @@ def Creator_HOG(exceptions):
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Approver(HOD_HOD)_SAME.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
 
-
+@st.cache_resource(show_spinner=False)
 def same_Creator_Verified(exceptions):
     dfe = exceptions.copy()
     # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
@@ -944,7 +947,7 @@ def same_Creator_Verified(exceptions):
 dfholiday = pd.read_excel(
     "unlocked holiday.xlsx")
 
-
+@st.cache_resource(show_spinner=False)
 def Approval_holidays(exceptions):
     dfe = exceptions.copy()
     # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
@@ -1084,7 +1087,7 @@ def Approval_holidays(exceptions):
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Holiday Transactions.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
 
-
+@st.cache_resource(show_spinner=False)
 def Pstingverified_holidays(exceptions):
     dfe = exceptions.copy()
     # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
@@ -1217,4 +1220,4 @@ def Pstingverified_holidays(exceptions):
         # Download link for Excel file within a Markdown
         download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Created_verified on Holidays.xlsx">Download Excel file</a>'
         st.markdown(download_link, unsafe_allow_html=True)
-#https://www.skyfilabs.com/project-ideas/latest-projects-based-on-renewable-energy
+
