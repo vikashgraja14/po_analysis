@@ -141,6 +141,8 @@ if st.session_state.upload:
             # filtered_data = filtered_data.rename(columns={'Reimbursing ID':'Vendor','Creator':'Created'})
             for col in ['Cost Ctr', 'G/L', 'Vendor', 'Created']:
                 filtered_data[col] = filtered_data[col].str.split('-').str[0]
+            for col in ['Cost Ctr', 'G/L', 'Vendor', 'Created']:
+                filtered_datasheet2[col] = filtered_datasheet2[col].str.split('-').str[0]
             df23 = filtered_data.copy()
             c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
             with card1:
