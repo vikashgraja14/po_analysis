@@ -6,7 +6,6 @@ dfholiday = pd.read_excel(
     "unlocked holiday.xlsx")
 dfholiday2 = pd.read_excel(
     "unlocked holiday.xlsx")
-
 card1_style = """
              display: flex;
              flex-direction: column;
