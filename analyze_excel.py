@@ -1,14 +1,54 @@
-import streamlit as st
-import base64
-from io import BytesIO
-import pandas as pd
-import plotly.express as px
+"""
+This module imports the necessary libraries for data processing and visualization.
+
+Modules:
+    os: Provides a way of using operating system dependent functionality
+    like reading or writing to the file system.
+    re: Offers a set of functions that allows us to search a string for
+     a match (regular expressions).
+    difflib: Provides tools for comparing sequences, especially useful
+    for comparing text files.
+    pandas: A powerful data manipulation and analysis library for Python.
+    Here it's used to read and manipulate Excel data.
+    plotly.express: A high-level interface to Plotly, a graphing library.
+    It's used for creating interactive plots and visualizations.
+    streamlit: A framework for creating web apps in pure Python. Used for
+    displaying and interacting with data and visualizations in a web interface.
+"""
 import os
 import re
+import difflib
+from functools import partial
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+from difflib import SequenceMatcher
+
 directory = os.path.dirname(__file__)
 os.chdir(directory)
+dfholiday = pd.read_excel(
+    "unlocked holiday.xlsx")
+dfholiday2 = pd.read_excel(
+    "unlocked holiday.xlsx")
+
 @st.cache_resource(show_spinner=False)
 def process_data(files):
+    """
+      Process Excel files containing non-PO payment data.
+
+      Args:
+      - files (list): List of file paths or file objects (xlsx format)
+      containing non-PO payment data.
+
+      Returns:
+      - pandas.DataFrame: Concatenated DataFrame containing processed
+      non-PO payment data.
+
+      This function reads each Excel file from the provided list, processes them
+      into a standardized format,
+      and concatenates them into a single DataFrame for further analysis.
+
+      """
     data = pd.read_excel(files)
     df1 = pd.read_excel(
         "Cost Center.xlsx",
@@ -28,7 +68,10 @@ def process_data(files):
     mapping = dict(zip(dfcost['Cost Ctr'], dfcost['CostctrName']))
     df['CostctrName'] = df['Cost Ctr'].map(mapping)
     df = df[df['Status of Request'] == 'ALL APPROVALS ARE DONE']
-    df = df[df['Clearing doc no.'] != '']
+    df['Clearing doc no.'] = df['Clearing doc no.'].astype(str)
+    df = df[df['Clearing doc no.'].str.startswith('5')]
+    df = df.query('`Clearing doc no.`.str.startswith("5")')
+
     filtered_df = df
     filtered_df.reset_index(drop=True, inplace=True)
     filtered_df.index += 1
@@ -53,8 +96,10 @@ def process_data(files):
     filtered_df['Updated on'] = pd.to_datetime(filtered_df['Updated on'], errors='coerce')
     filtered_df['Verified on'] = pd.to_datetime(filtered_df['Verified on'], errors='coerce')
     filtered_df['HOG Approval on'] = pd.to_datetime(filtered_df['HOG Approval on'], errors='coerce')
+    filtered_df['HOD Apr/Rej on'] = pd.to_datetime(filtered_df['HOD Apr/Rej on'], errors='coerce')
     filtered_df['Clearing date'] = pd.to_datetime(filtered_df['Clearing date'], errors='coerce')
     filtered_df['year'] = filtered_df['Pstng Date'].dt.year
+    filtered_df['HOD Apr/Rej on'] = filtered_df['HOD Apr/Rej on'].dt.date
     filtered_df['Doc. Date'] = filtered_df['Doc. Date'].dt.date
     filtered_df['Pstng Date'] = filtered_df['Pstng Date'].dt.date
     filtered_df['On'] = filtered_df['On'].dt.date
@@ -73,1151 +118,662 @@ def process_data(files):
     df['G/L'] = df['G/L'].astype(str)
     df['G/L'] = df['G/L'].apply(lambda x: str(x) if isinstance(x, str) else '')
     df['G/L'] = df['G/L'].apply(lambda x: re.sub(r'\..*', '', x))
+    df['Clearing doc no.'] = df['Clearing doc no.'].astype(str)
+    df['Clearing doc no.'] = df['Clearing doc no.'].apply(
+        lambda x: str(x) if isinstance(x, str) else '')
+    df['Clearing doc no.'] = df['Clearing doc no.'].apply(lambda x: re.sub(r'\..*', '', x))
+    df['Clearing doc no.'] = df['Clearing doc no.'].astype(str)
+    df['Clearing doc no.'] = df['Clearing doc no.'].apply(
+        lambda x: str(x) if isinstance(x, str) else '')
+    df['Clearing doc no.'] = df['Clearing doc no.'].apply(
+        lambda x: re.sub(r'\..*', '', x))
+    df['Document No'] = df['Document No'].astype(str)
+    df['Document No'] = df['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
+    df['Document No'] = df['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
+    df['HOG Approval by'] = df['HOG Approval by'].astype(str)
+    df['HOG Approval by'] = df['HOG Approval by'].apply(lambda x: str(x) if isinstance(x, str) else '')
+    df['HOG Approval by'] = df['HOG Approval by'].apply(lambda x: re.sub(r'\..*', '', x))
     df.reset_index(drop=True, inplace=True)
     return df
+
+def find_similar_invoice_numbers(filtered_df, threshold=0.7):
+  """
+  Finds rows in a DataFrame with invoice numbers in a specified column that are at least
+  a certain percentage similar to each other.
+
+  Args:
+      df (pandas.DataFrame): The DataFrame containing invoice numbers.
+      threshold (float, optional): The minimum similarity threshold (0.0 to 1.0). Defaults to 0.7.
+
+  Returns:
+      pandas.DataFrame: A new DataFrame containing the rows with similar invoice numbers.
+  """
+
+  def compare_invoices(invoice1, invoice2):
+    """
+    Compares two invoice numbers and returns True if similarity is above the threshold.
+    """
+    ratio = SequenceMatcher(None, invoice1, invoice2).ratio()
+    return ratio >= threshold
+
+  # Create a copy to avoid modifying the original DataFrame
+  filtered_df = filtered_df
+
+  # Create an empty list to store similar invoice number pairs
+  similar_invoices = []
+
+  # Iterate through each row
+  for i in range(len(filtered_df)):
+    invoice1 = filtered_df.iloc[i]['Invoice Number']
+    # Compare with all subsequent rows (excluding itself)
+    for j in range(i + 1, len(filtered_df)):
+      invoice2 = filtered_df.iloc[j]['Invoice Number']
+      if compare_invoices(invoice1, invoice2):
+        similar_invoices.append((i, j))  # Store row indices of the pair
+
+  # Filter the DataFrame based on the identified similar invoice number pairs
+  filtered_df = filtered_df.iloc[sorted([x for pair in similar_invoices for x in pair])]
+
+  return filtered_df
+
+def format_amount(amount):
+    """
+    Format the given amount into a human-readable currency string.
+
+    Args:
+    - amount (float or int): The amount to be formatted.
+
+    Returns:
+    - str: A formatted string representing the amount in
+    Indian Rupees (₹).
+           The formatting depends on the length of the integer
+           part of the amount:
+           - If the integer length is greater than 5 and less
+           than or equal to 7, the amount is divided by
+           100,000 and formatted as "₹ {amount / 100000:,.2f} lks".
+           - If the integer length is greater than 7, the amount
+            is divided by 10,000,000 and formatted as
+            "₹ {amount / 10000000:,.2f} crs".
+           - Otherwise, the amount is formatted directly as
+           "₹ {amount:,.2f}".
+
+    """
+    integer_part = int(amount)
+    integer_length = len(str(integer_part))
+
+    if 5 < integer_length <= 7:
+        return f"₹ {amount / 100000:,.2f} lks"
+    elif integer_length > 7:
+        return f"₹ {amount / 10000000:,.2f} crs"
+    else:
+        return f"₹ {amount:,.2f}"
 
 
 
 @st.cache_resource(show_spinner=False)
+def has_special_characters(s):
+    return re.search(r'[^A-Za-z0-9]+', s) is not None
+
+def is_similar(s1, s2):
+    # Remove special characters from both strings
+    s1_clean = re.sub(r'[^A-Za-z0-9]+', '', str(s1))
+    s2_clean = re.sub(r'[^A-Za-z0-9]+', '', str(s2))
+    # Check if the cleaned strings are equal
+    return s1_clean == s2_clean
+
+
+def identify_and_return_all_duplicates(filtered_df):
+  """
+  Efficiently identifies rows with potentially duplicate invoice numbers, considering all special characters,
+  and returns a DataFrame containing all rows (including duplicates) from the original DataFrame.
+
+  Args:
+      df (pd.DataFrame): Input DataFrame containing an "Invoice Number" column.
+
+  Returns:
+      pd.DataFrame: A DataFrame containing all rows (including duplicates) from the original DataFrame.
+  """
+
+  # Regular expression to match any character that is not alphanumeric or hyphen
+  special_char_pattern = r"[^\w-]+"
+
+  # Vectorized removal of special characters using pandas
+  filtered_df["Clean Invoice Number"] = filtered_df["Invoice Number"].str.replace(
+      pat=special_char_pattern,
+      repl="",
+      regex=True
+  )
+
+  # Efficient duplicate check with vectorized operations
+  duplicates = filtered_df[filtered_df["Clean Invoice Number"].duplicated(keep="first")]
+
+  # Merge based on "Invoice Number" column (assuming it's unique)
+  filtered_df = filtered_df.merge(duplicates, how='outer', on='Invoice Number')
+
+  return filtered_df
+
+@st.cache_resource(show_spinner=False)
 def line_plot_overall_transactions(data, category, years, width=400, height=300):
-    filtered_data = data[(data['category'] == category) & (data['year'].isin(years))]
-    data_length = filtered_data.groupby('year').size().reset_index(name='data_len')
+    """
+    Create a line plot showing the count of transactions over
+     the specified years for a given category.
+
+    Args:
+        data (pd.DataFrame): The input data containing transaction records.
+        category (str): The category of transactions to filter by.
+        years (list of int): The years to include in the plot.
+        width (int, optional): The width of the plot. Defaults to 400.
+        height (int, optional): The height of the plot. Defaults to 300.
+
+    Returns:
+        plotly.graph_objs._figure.Figure: The Plotly figure object
+        containing the line plot.
+
+    """
+    filtered_data = data[(data["category"] == category) & (data["year"].isin(years))]
+    data_length = filtered_data.groupby("year").size().reset_index(name="data_len")
 
     # Create the line plot
-    fig = px.line(data_length, x='year', y='data_len',
-                  title='Transactions Count ',
-                  labels={'year': 'Year', 'data_len': 'Transactions'},
-                  markers=True)
+    fig = px.line(
+        data_length,
+        x="year",
+        y="data_len",
+        title="Transactions Count",
+        labels={"year": "Year", "data_len": "Transactions"},
+        markers=True,
+    )
 
     # Set mode to 'lines+markers'
-    fig.update_traces(mode='lines+markers')
+    fig.update_traces(mode="lines+markers")
 
     # Update layout with width and height
     fig.update_layout(width=width, height=height)
 
     # Modify x-axis labels to include hyphens between years
-    fig.update_xaxes(tickvals=years,
-                     ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
+    fig.update_xaxes(
+        tickvals=years,
+        ticktext=[re.sub(r"(\d{4})(\d{2})", r"\1-\2", str(year)) for year in years],
+    )
 
     # Format y-axis ticks as integers
     fig.update_yaxes(tickformat=".0f")
 
     # Add text annotations to data points
-    for year, count in zip(data_length['year'], data_length['data_len']):
+    for year, count in zip(data_length["year"], data_length["data_len"]):
         fig.add_annotation(
             x=year,
             y=count,
             text=str(count),
             showarrow=False,
-            font=dict(size=12, color='black'),
-            align='center',
-            yshift=13
+            font={"size": 12, "color": "black"},  # Use dictionary literal directly
+            align="center",
+            yshift=13,
         )
-
     return fig
+
+
 @st.cache_resource(show_spinner=False)
 def line_plot_used_amount(data, category, years, width=400, height=300):
+    """
+    Create a line plot showing the total amount of transactions over
+     the specified years for a given category.
+
+    Args:
+        data (pd.DataFrame): The input data containing transaction records.
+        category (str): The category of transactions to filter by.
+        years (list of int): The years to include in the plot.
+        width (int, optional): The width of the plot. Defaults to 400.
+        height (int, optional): The height of the plot. Defaults to 300.
+
+    Returns:
+        plotly.graph_objs._figure.Figure: The Plotly figure object containing the line plot.
+
+    """
     # Filter the data
-    data = data[(data['category'] == category) & (data['year'].isin(years))]
+    data = data[(data["category"] == category) & (data["year"].isin(years))]
 
     # Group by year and sum the amounts
-    amount_length = data.groupby('year')['Amount'].sum().reset_index(name='amount_length')
+    amount_length = (
+        data.groupby("year")["Amount"].sum().reset_index(name="amount_length")
+    )
 
     # Create the line plot
-    fig = px.line(amount_length, x='year', y='amount_length',
-                  title='Transactions Value',
-                  labels={'year': 'Year', 'amount_length': 'Amount'},
-                  markers=True)
+    fig = px.line(
+        amount_length,
+        x="year",
+        y="amount_length",
+        title="Transactions Value",
+        labels={"year": "Year", "amount_length": "Amount"},
+        markers=True,
+    )
 
     # Set mode to 'lines+markers'
-    fig.update_traces(mode='lines+markers')
+    fig.update_traces(mode="lines+markers")
 
     # Update layout with width and height
     fig.update_layout(width=width, height=height)
 
     # Modify x-axis labels to include hyphens between years
-    fig.update_xaxes(tickvals=years,
-                     ticktext=[re.sub(r'(\d{4})(\d{2})', r'\1-\2', str(year)) for year in years])
+    fig.update_xaxes(
+        tickvals=years,
+        ticktext=[re.sub(r"(\d{4})(\d{2})", r"\1-\2", str(year)) for year in years],
+    )
 
     # Define the format_amount function
-    def format_amount(amount):
-        integer_part = int(amount)
+    def format_amount(amount_value):
+        """
+        Format the given amount based on its value.
+
+        Parameters:
+        - amount_value (float or int): The amount to format.
+
+        Returns:
+        - str: Formatted string representation of the amount.
+        """
+        integer_part = int(amount_value)
         integer_length = len(str(integer_part))
-        if integer_length > 5 and integer_length <= 7:
-            return f"₹ {amount / 100000:,.2f} lks"
-        elif integer_length > 7:
-            return f"₹ {amount / 10000000:,.2f} crs"
-        else:
-            return f"₹ {amount:,.2f}"
+
+        if 5 < integer_length <= 7:
+            return f"₹ {amount_value / 100000:,.2f} lks"
+
+        if integer_length > 7:
+            return f"₹ {amount_value / 10000000:,.2f} crs"
+
+        return f"₹ {amount_value:,.2f}"
 
     # Add formatted annotations on top of data points
-    for year, amount in zip(amount_length['year'], amount_length['amount_length']):
+    for year, amount in zip(amount_length["year"], amount_length["amount_length"]):
         formatted_amount = format_amount(amount)
         fig.add_annotation(
             x=year,
             y=amount,
             text=formatted_amount,
             showarrow=False,
-            font=dict(size=12, color='black'),
-            align='center',
-            yshift=13
+            font={"size": 12, "color": "black"},
+            align="center",
+            yshift=13,
         )
 
     return fig
-card1_style = """
-             display: flex;
-             flex-direction: column;
-             justify-content: center;
-             align-items: center;
-             background-color: #ffffff;
-             padding: 10px;
-             border-radius: 10px;
-             font-style: bold:
-             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-             max-width: 200px; /* Adjust the max-width as needed */
-             margin-left: 50px; /* Set left margin to auto */
-             # margin-right: auto; /* Set right margin to auto */
-         """
-card2_style = """
-             display: flex;
-             flex-direction: column;
-             justify-content: center;
-             align-items: center;
-             background-color: #ffffff;
-             padding: 10px;
-             border-radius: 10px;
-             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-             max-width: 200px; /* Adjust the max-width as needed */
-             margin-left: 50px; /* Set left margin to auto */
-             # margin-right: auto; /* Set right margin to auto */
-         """
-@st.cache_resource(show_spinner=False)
-def display_duplicate_invoices(exceptions):
-    dfe = exceptions.copy()
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center"},
-               inplace=True)
-    c1, c2, c3, c4, c5 = st.columns(5)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    # Sorting by 'Invoice Number'
-    dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-    columns_to_convert = ['Name', 'Amount', 'Doc. Date', 'Invoice Number', "ID"]
-    dfe[columns_to_convert] = dfe[columns_to_convert].astype(str)
-    selected_option = c2.selectbox("Select Duplicate type",
-                                   ["Duplicate Invoice", "Reimbursement Amount_ID_DocDate_SAME",
-                                    "Reimbursement Amount_CostCtr_70%Inv_SAME"], index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "Reimbursement Amount_ID_DocDate_SAME":
-        dfe = dfe[dfe.duplicated(subset=['ID', 'Amount','Doc. Date'], keep=False)]
-        dfe = dfe.sort_values(by=['ID', 'Amount'])
-        filename = "Reimbursement Amount_ID_DocDate_SAME.xlsx"
-    elif selected_option == "Reimbursement Amount_CostCtr_70%Inv_SAME":
-        grouped_df = dfe.groupby(['Cost Center', 'Amount']).filter(lambda group: len(group) > 1)
-
-        # Step 4: Compare values in column 'Invoice Number'
-        def compare_strings(s1, s2):
-            min_length = min(len(s1), len(s2))
-
-            for i in range(min_length):
-                if s1[i] != s2[i]:
-                    return False  # Characters at the same index don't match
-
-            # If one string is longer, check if the remaining characters are all spaces
-            if len(s1) > min_length:
-                return s1[min_length:].isspace()
-            elif len(s2) > min_length:
-                return s2[min_length:].isspace()
-
-            return True  # All characters match
-
-        dfe = grouped_df[grouped_df.apply(
-            lambda row: compare_strings(row['Invoice Number'], grouped_df['Invoice Number'].iloc[0]), axis=1)]
-        dfe = dfe.groupby(['Amount', 'Cost Center']).filter(lambda group: len(group) > 1)
-
-        # dfe = dfe.sort_values(by=['Amount','Invoice Number'])
-        dfe.reset_index(drop=True, inplace=True)
-        filename = "Reimbursement Amount_CostCtr_70%Inv_SAME.xlsx"
-    elif selected_option == "Duplicate Invoice":
-        dfe = dfe[dfe.duplicated(subset=['Invoice Number'], keep=False)]
-        dfe = dfe.sort_values(by=['Invoice Number', 'ID', 'Name'], ascending=True)
-        filename = "Duplicate Exceptions.xlsx"
-        # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-    # dfe = dfe.sort_values(by=['Invoice Number','ID'], ascending=True)
-    # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-    dfe['Amount'] = pd.to_numeric(dfe['Amount'], errors='coerce')
-    dfe['Amount'] = dfe['Amount'].astype(int)
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with Duplicate Invoices</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Invoice Number</div>",
-            unsafe_allow_html=True)
-    else:
-        c1, card1, middle_column, card2, c2 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            Total_Amount_Alloted = dfe['Amount'].sum()
-
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
-
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
 
 
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-            # Display the DataFrame
-
-        c1, c2, c3 = st.columns([1, 8, 1])
-        dfe = dfe.drop(columns=['year'])
-        # dfe['Amount'] = dfe['Amount'].round()
-        # dfe = dfe.sort_values(by=['Name', 'Amount', 'Doc. Date'])
-        # dfe.sort_values(by='Invoice Number', ascending=True, inplace=True)
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        c2.write(dfee[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                      'G/L', 'Document No',
-                      'Doc. Date', 'Pstng Date', 'Amount']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="{filename}">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
-@st.cache_resource(show_spinner=False)
-def same_Creator_Verified_HOG(exceptions):
-    dfe = exceptions.copy()
-    dfe = dfe[(dfe['Created'] == dfe['Verified by']) & (dfe['Verified by'] == dfe['HOG Approval by'])]
-    dfe = dfe
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                        'Created': 'Created by'},
-               inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with same Creator ID , Verified ID and HOG Approval</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID, Verified ID and HOG Approval ID</div>",
-            unsafe_allow_html=True)
-    else:
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            Total_Amount_Alloted = dfe['Amount'].sum()
-
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
-
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-
-
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
-        # Display the DataFrame
-        dfe = dfe.drop(columns=['year'])
-        # Display the DataFrame
-        dfe = dfe.drop(columns=['year'])
-        dfe = dfe.sort_values(by=['Created by', 'Cost Center'])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-
-        # st.markdown(download_link, unsafe_allow_html=True)
-        # dfe['Amount'] = dfe['Amount'].round()
-        c22.write(dfee[
-                      ['Payable req.no', 'Type', 'Vendor', 'Vendor Name', 'Invoice Number', 'Text', "Cost Ctr",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Verifier_Approver(HOD_HOD)_SAME.xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
-def same_Creator_Verified_HOGno(exceptions):
-    dfe = exceptions.copy()
-    # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-    dfe = dfe[
-        (dfe['Created'] == dfe['Verified by']) & (dfe['HOG Approval by'].isna())]
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(
-        columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                 'Created': 'Created by'},
-        inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
+def check_similarity(s1, s2, threshold=0.7):
+    """
+    Check if two strings are similar based on a similarity threshold.
+
+    Parameters:
+    - s1 (str): First string to compare.
+    - s2 (str): Second string to compare.
+    - threshold (float, optional): Minimum similarity ratio to consider strings similar.
+    Defaults to 0.8.
+
+    Returns:
+    - bool: True if the similarity ratio between s1 and s2 is greater than or equal
+    to the threshold, False otherwise.
+    """
+    s1 = str(s1)
+    s2 = str(s2)
+    similarity = difflib.SequenceMatcher(None, s1, s2).ratio()
+    return similarity >= threshold
+
+def optimize_similarity_check(filtered_df, threshold=0.7):
+    """
+    Efficiently identifies invoice numbers with high character resemblance in a DataFrame.
+
+    Parameters:
+    - filtered_df (pd.DataFrame): Input DataFrame containing invoice numbers.
+    - threshold (float, optional): Minimum similarity score to consider strings close.
+    Defaults to 0.8.
+
+    Returns:
+    - pd.DataFrame: A new DataFrame containing only rows with potentially matching invoice numbers.
+    """
+
+    # Create a vectorized function to check resemblance efficiently
+    vectorized_check = partial(check_similarity, threshold=threshold)
+
+    # Efficiently compare each invoice number with all others based on character similarity
+    similar_pairs = filtered_df["Invoice Number"].apply(vectorized_check, args=(filtered_df["Invoice Number"],))
+
+    # Mark rows with potentially matching invoice numbers using a more descriptive name
+    filtered_df["potentially_matching"] = similar_pairs  # New column name
+
+    return filtered_df
+
+def filter_auth(filtered_df, checked_columns_auth, filename):
+    """
+    Filter DataFrame based on checked authorization columns and sort results.
+
+    Parameters:
+    - filtered_df (pd.DataFrame): DataFrame to filter.
+    - checked_columns_auth (list): List of column names to check for authorization.
+    - filename (str): Name of the output file.
+
+    Returns:
+    - tuple or None: Tuple containing filtered DataFrame, checked columns list,
+    and filename if successful,
+      or None, None, None if an error occurs.
+    """
+    if len(checked_columns_auth) == 1:
+        st.error("Please select another checkbox to verify Authorization Parameters.")
+        return None, None, None
     else:
-        dfe = dfe[dfe['year'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries with same Creator ID , Verified ID  and HOG Approval Is None</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID, Verified ID and With No HOG Approval</div>",
-            unsafe_allow_html=True)
-    else:
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            Total_Amount_Alloted = dfe['Amount'].sum()
+        for i in range(len(checked_columns_auth) - 1):
+            col_i = checked_columns_auth[i]
+            col_j = checked_columns_auth[i + 1]
+            filtered_df = filtered_df[filtered_df[col_i] == filtered_df[col_j]]
 
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
+    sort_columns = checked_columns_auth.copy()
+    if "Reimbursement ID" not in checked_columns_auth and "Cost Center" not in checked_columns_auth:
+        sort_columns += ["Reimbursement ID", "Cost Center"]
+    elif "Reimbursement ID" in checked_columns_auth and "Cost Center" not in checked_columns_auth:
+        sort_columns += ["Cost Center"]
+    elif "Cost Center" in checked_columns_auth and "Reimbursement ID" not in checked_columns_auth:
+        sort_columns += ["Reimbursement ID"]
 
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
+    filtered_df = filtered_df.sort_values(by=sort_columns)
+    filtered_df.reset_index(drop=True, inplace=True)
+    filtered_df.index += 1
 
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                unsafe_allow_html=True
+    filename = "Transactions_with_same_column.xlsx"
+
+    try:
+        return filtered_df, checked_columns_auth, filename
+    except FileNotFoundError as e:
+        # Handle specific exception (e.g., file not found)
+        st.error(f"File not found: {e}")
+        return None, None, None
+
+
+def filter_gen(filtered_df, checked_columns_gen, filename):
+    """
+    Filter and sort DataFrame based on checked columns.
+
+    Parameters:
+    - filtered_df (pd.DataFrame): DataFrame to filter.
+    - checked_columns_gen (list): List of columns to check for duplicates.
+    - filename (str): Filename to save results.
+
+    Returns:
+    - pd.DataFrame or None: Filtered DataFrame, checked_columns_gen, filename.
+    """
+    filtered_df = filtered_df[
+        filtered_df.duplicated(subset=checked_columns_gen, keep=False)
+    ]
+
+    sort_columns = checked_columns_gen.copy()
+    if "Reimbursement ID" not in checked_columns_gen and "Cost Center" not in checked_columns_gen:
+        sort_columns += ["Reimbursement ID", "Cost Center"]
+    elif "Reimbursement ID" in checked_columns_gen and "Cost Center" not in checked_columns_gen:
+        sort_columns += ["Cost Center"]
+    elif "Cost Center" in checked_columns_gen and "Reimbursement ID" not in checked_columns_gen:
+        sort_columns += ["Reimbursement ID"]
+
+    filtered_df = filtered_df.sort_values(by=sort_columns)
+    filtered_df.reset_index(drop=True, inplace=True)
+    filtered_df.index += 1
+
+    filename = "Transactions_with_same_column.xlsx"
+
+    try:
+        return filtered_df, checked_columns_gen, filename
+
+    except pd.errors.EmptyDataError as e:
+        st.error(f"An error occurred: {e}")
+        return None, None, None
+
+
+# Example usage (assuming filtered_df and checked_columns_gen are defined)
+# try:
+#     filtered_df, checked_columns_gen, filename = filter_groups_by_size(filtered_df, checked_columns_gen, "Transactions_with_same_column.xlsx")
+# except pd.errors.EmptyDataError as e:
+#     print(f"An error occurred: {e}")
+#     filtered_df, checked_columns_gen, filename = None, None, None
+
+def filter_spec(filtered_df, checked_columnsspec, dfholiday, filename):
+    """
+    Filter the dataframe based on specified columns and holiday dates,
+     and perform various transformations
+    including finding similar invoices and handling special characters
+     in invoice numbers.
+
+    Args:
+        filtered_df (pd.DataFrame): The dataframe to be filtered and processed.
+        checked_columnsspec (list of str): The columns based on which
+        filtering and processing will be applied.
+        dfholiday (pd.DataFrame): The dataframe containing holiday dates.
+        filename (str): The filename for saving the processed dataframe.
+
+    Returns:
+        pd.DataFrame: The filtered and processed dataframe.
+        list of str: The updated list of checked columns.
+        pd.DataFrame: The dataframe containing holiday dates.
+        str: The filename for saving the processed dataframe.
+
+    Raises:
+        Exception: If an error occurs during processing, an error message
+         is displayed and None is returned
+                   for all return values.
+
+    """
+    filtered_df["Invoice Number"] = filtered_df["Invoice Number"].astype(str)
+    if "Holiday Transactions" in checked_columnsspec:
+        if len(checked_columnsspec) == 1:
+            filtered_df["Document Date"] = pd.to_datetime(
+                filtered_df["Document Date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
+            filtered_df["Posting Date"] = pd.to_datetime(
+                filtered_df["Posting Date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.write("")
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
+            filtered_df["Verified on"] = pd.to_datetime(
+                filtered_df["Verified on"], format="%Y/%m/%d", errors="coerce"
             )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
+            dfholiday["date"] = pd.to_datetime(
+                dfholiday["date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
-        # Display the DataFrame
-        # dfe['Amount'] = dfe['Amount'].round()
-        dfe = dfe.drop(columns=['year'])
-        dfe = dfe.sort_values(by=['Name', 'Created by', "Cost Center"])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        c22.write(dfee[
-                      ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Verifier_SAME_NO APPROVER.xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
-
-@st.cache_resource(show_spinner=False)
-def Creator_Verified_HOGno(exceptions):
-    dfe = exceptions.copy()
-    # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-    dfe = dfe[(~dfe['Created'].isna()) & (~dfe['Verified by'].isna()) & dfe['HOG Approval by'].isna()]
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(
-        columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                 'Created': 'Created by'},
-        inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    options = ["All"] + [gl for gl in dfe['G/L'].unique() if gl != "All"]
-    selected_option = c2.selectbox("Select a G/L", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-    else:
-        dfe = dfe[dfe['G/L'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With No HOG Approval</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries Without HOG Approval</div>",
-            unsafe_allow_html=True)
-    else:
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            Total_Amount_Alloted = dfe['Amount'].sum()
-
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
-
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
-        # Display the DataFrame
-        dfe = dfe.drop(columns=['year'])
-        # dfe['Amount'] = dfe['Amount'].round()
-        dfe = dfe.sort_values(by=['Name', "Cost Center"])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        c22.write(dfee[
-                      ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="No approver(HOD_HOG).xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
-
-@st.cache_resource(show_spinner=False)
-def Creator_HOG(exceptions):
-    dfe = exceptions.copy()
-    # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-    dfe = dfe[
-        (dfe['Created'] == dfe['HOG Approval by'])]
-
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(
-        columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": " Cost Center",
-                 'Created': 'Created by'},
-        inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With Same CreatorID and HOG ApprovalID</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries With Same CreatorID and HOG ApprovalID</div>",
-            unsafe_allow_html=True)
-    else:
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            Total_Amount_Alloted = dfe['Amount'].sum()
-
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
-
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
-        # Display the DataFrame
-        # dfe['Amount'] = dfe['Amount'].round()
-        dfe = dfe.drop(columns=['year'])
-        dfe = dfe.sort_values(by=['Name', 'Created by'])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        c22.write(dfee[
-                      ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Approver(HOD_HOD)_SAME.xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
-
-@st.cache_resource(show_spinner=False)
-def same_Creator_Verified(exceptions):
-    dfe = exceptions.copy()
-    # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-    dfe = dfe[
-        (dfe['Created'] == dfe['Verified by'])]
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(
-        columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                 'Created': 'Created by'},
-        inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>Entries With Same Creator ID And Verified ID</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries with same Creator ID And Verified ID </div>",
-            unsafe_allow_html=True)
-    else:
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            Total_Amount_Alloted = dfe['Amount'].sum()
-
-            # Check if the length of Total_Amount_Alloted is greater than 5
-            if len(str(Total_Amount_Alloted)) > 5:
-                # Get the integer part of the total amount
-                integer_part = int(Total_Amount_Alloted)
-                # Calculate the length of the integer part
-                integer_length = len(str(integer_part))
-
-                # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                if integer_length > 5 and integer_length <= 7:
-                    Total_Amount_Alloted /= 100000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                # Divide by 1 crore if the integer length is greater than 7
-                elif integer_length > 7:
-                    Total_Amount_Alloted /= 10000000
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-            else:
-                amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-            # Display the total amount spent
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card1_style}'>"
-                f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
-        # Display the DataFrame
-        # dfe['Amount'] = dfe['Amount'].round()
-        dfe = dfe.sort_values(by=['Created by', 'Name', "Cost Center"])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfe = dfe.drop(columns=['year'])
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        c22.write(dfee[
-                      ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Creator_Verifier_SAME.xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
-
-
-dfholiday = pd.read_excel(
-    "unlocked holiday.xlsx")
-
-@st.cache_resource(show_spinner=False)
-def Approval_holidays(exceptions):
-    dfe = exceptions.copy()
-    # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-    dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
-    dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
-    dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
-    dfholiday['date'] = pd.to_datetime(dfholiday['date'], format='%Y/%m/%d', errors='coerce')
-    # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
-    dfe = dfe[dfe['Pstng Date'].isin(dfholiday['date'])]
-    # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
-    # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
-    dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
-    dfe['Doc. Date'] = dfe['Doc. Date'].dt.date
-    dfe['Verified on'] = dfe['Verified on'].dt.date
-
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(
-        columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                 'Created': 'Created by'},
-        inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-
-
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES MADE ON HOLIDAYS</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries made on holidays</div>",
-            unsafe_allow_html=True)
-    else:
-
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            with card1:
-                Total_Amount_Alloted = dfe['Amount'].sum()
-
-                # Check if the length of Total_Amount_Alloted is greater than 5
-                if len(str(Total_Amount_Alloted)) > 5:
-                    # Get the integer part of the total amount
-                    integer_part = int(Total_Amount_Alloted)
-                    # Calculate the length of the integer part
-                    integer_length = len(str(integer_part))
-
-                    # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                    if integer_length > 5 and integer_length <= 7:
-                        Total_Amount_Alloted /= 100000
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                    # Divide by 1 crore if the integer length is greater than 7
-                    elif integer_length > 7:
-                        Total_Amount_Alloted /= 10000000
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                # Display the total amount spent
-                st.markdown(
-                    f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                    unsafe_allow_html=True
+            filtered_df = filtered_df[
+                filtered_df["Posting Date"].isin(dfholiday["date"])
+            ]
+            checked_columnsspec = [
+                (
+                    "Posting Date"
+                    if col == "Holiday Transactions"
+                    else (
+                        "Invoice Number"
+                        if col in ("Inv-Special Character", "80 % Same Invoice")
+                        else col
+                    )
                 )
-                st.markdown(
-                    f"<div style='{card1_style}'>"
-                    f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                    "</div>",
-                    unsafe_allow_html=True
+                for col in checked_columnsspec
+            ]
+        elif (
+            len(checked_columnsspec) == 2
+            and "Inv-Special Character" in checked_columnsspec
+        ):
+            filtered_df["Document Date"] = pd.to_datetime(
+                filtered_df["Document Date"], format="%Y/%m/%d", errors="coerce"
+            )
+            filtered_df["Posting Date"] = pd.to_datetime(
+                filtered_df["Posting Date"], format="%Y/%m/%d", errors="coerce"
+            )
+            filtered_df["Verified on"] = pd.to_datetime(
+                filtered_df["Verified on"], format="%Y/%m/%d", errors="coerce"
+            )
+            dfholiday["date"] = pd.to_datetime(
+                dfholiday["date"], format="%Y/%m/%d", errors="coerce"
+            )
+            filtered_df = filtered_df[
+                filtered_df["Posting Date"].isin(dfholiday["date"])
+            ]
+            filtered_df = filtered_df.sort_values(
+                by=["Invoice Number", "Posting Date"])
+
+            grouped = filtered_df.groupby('Reimbursement ID')
+            similar_invoices = set()
+
+            for name, group in grouped:
+                if len(group) > 1:  # Apply logic only if group size is greater than one
+                    filtered_df = filtered_df[~filtered_df.duplicated(subset='Invoice Number', keep=False)]
+                    # Create a list of tuples with original and cleaned invoice numbers
+                    invoice_pairs = [(invoice, re.sub(r'[^A-Za-z0-9]+', '', str(invoice))) for invoice in
+                                     group['Invoice Number']]
+                    # Find all unique pairs where invoices are similar within the group
+                    for i, (inv1, clean_inv1) in enumerate(invoice_pairs):
+                        for inv2, clean_inv2 in invoice_pairs[i + 1:]:
+                            if is_similar(clean_inv1, clean_inv2):
+                                similar_invoices.add(inv1)
+                                similar_invoices.add(inv2)
+            checked_columnsspec = [
+                (
+                    "Posting Date"
+                    if col == "Holiday Transactions"
+                    else (
+                        "Invoice Number"
+                        if col in ("Inv-Special Character", "80 % Same Invoice")
+                        else col
+                    )
                 )
-                st.write("")
-            # Total_alloted = Total_Amount_Alloted
-            # st.markdown(
-            #     f"<div style='{card1_style}'>"
-            #     f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>₹ {Total_alloted:,.2f} </h2>"
-            #     "</div>",
-            #     unsafe_allow_html=True
-            # )
-            # st.write("")
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
+                for col in checked_columnsspec
+            ]
+        elif (
+            len(checked_columnsspec) == 2 and "80 % Same Invoice" in checked_columnsspec
+        ):
+            filtered_df["Document Date"] = pd.to_datetime(
+                filtered_df["Document Date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
+            filtered_df["Posting Date"] = pd.to_datetime(
+                filtered_df["Posting Date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
-        # Display the DataFrame
-        # dfe['Amount'] = dfe['Amount'].round()
-        dfe = dfe.drop(columns=['year'])
-        dfe = dfe.sort_values(by=['Pstng Date', "Cost Center", 'Name'])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        # dfe = dfe.drop(columns=['year'])
-        c22.write(dfee[
-                      ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Holiday Transactions.xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
-
-@st.cache_resource(show_spinner=False)
-def Pstingverified_holidays(exceptions):
-    dfe = exceptions.copy()
-    # dfe = dfe.drop_duplicates(subset=['Vendor', 'year'], keep='first')
-    dfe['Doc. Date'] = pd.to_datetime(dfe['Doc. Date'], format='%Y/%m/%d', errors='coerce')
-    dfe['Pstng Date'] = pd.to_datetime(dfe['Pstng Date'], format='%Y/%m/%d', errors='coerce')
-    dfe['Verified on'] = pd.to_datetime(dfe['Verified on'], format='%Y/%m/%d', errors='coerce')
-    dfholiday['date'] = pd.to_datetime(dfholiday['date'], format='%Y/%m/%d', errors='coerce')
-    # df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
-    dfe = dfe[(dfe['Pstng Date'] == dfe['Verified on']) & dfe['Pstng Date'].isin(dfholiday['date'])]
-
-    # dfe = dfe[dfe['Pstng Date'].isin(df['date']) | dfe['Doc. Date'].isin(df['date']) | dfe['Verified on'].isin(df['date'])]
-    # dfe = dfe[dfe['Pstng Date'].isin(df['date'])]
-    dfe['Pstng Date'] = dfe['Pstng Date'].dt.date
-    dfe['Doc. Date'] = dfe['Doc. Date'].dt.date
-    dfe['Verified on'] = dfe['Verified on'].dt.date
-
-    dfe['Document No'] = dfe['Document No'].astype(str)
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: str(x) if isinstance(x, str) else '')
-    dfe['Document No'] = dfe['Document No'].apply(lambda x: re.sub(r'\..*', '', x))
-    dfe.rename(
-        columns={'Vendor Name': 'Name', 'Type': "Doc.Type", 'Vendor': "ID", "Cost Ctr": "Cost Center",
-                 'Created': 'Created by'},
-        inplace=True)
-    c1, c2, c3, c4 = st.columns(4)
-    options = ["All"] + [yr for yr in dfe['year'].unique() if yr != "All"]
-    selected_option = c1.selectbox("Select an Year", options, index=0)
-    # Filter the DataFrame based on the selected option
-    if selected_option == "All":
-        dfe = dfe  # Return the entire DataFrame
-
-
-    else:
-        dfe = dfe[dfe['year'] == selected_option]
-    dfe.reset_index(drop=True, inplace=True)
-    dfe.index += 1  # Start index from 1
-
-    st.write(
-        "<h2 style='text-align: center; font-size: 35px; font-weight: bold; color: black;'>ENTRIES MADE ON HOLIDAYS</h2>",
-        unsafe_allow_html=True)
-    st.write("")
-    if dfe.empty:
-        st.write(
-            "<div style='text-align: center; font-weight: bold; color: black;'>No entries made on holidays</div>",
-            unsafe_allow_html=True)
-    else:
-
-        c111, card1, middle_column, card2, c222 = st.columns([1, 4, 1, 4, 1])
-        with card1:
-            with card1:
-                Total_Amount_Alloted = dfe['Amount'].sum()
-
-                # Check if the length of Total_Amount_Alloted is greater than 5
-                if len(str(Total_Amount_Alloted)) > 5:
-                    # Get the integer part of the total amount
-                    integer_part = int(Total_Amount_Alloted)
-                    # Calculate the length of the integer part
-                    integer_length = len(str(integer_part))
-
-                    # Divide by 1 lakh if the integer length is greater than 5 and less than or equal to 7
-                    if integer_length > 5 and integer_length <= 7:
-                        Total_Amount_Alloted /= 100000
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} lakhs"
-                    # Divide by 1 crore if the integer length is greater than 7
-                    elif integer_length > 7:
-                        Total_Amount_Alloted /= 10000000
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f} crores"
-                    else:
-                        amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-                else:
-                    amount_display = f"₹ {Total_Amount_Alloted:,.2f}"
-
-                # Display the total amount spent
-                st.markdown(
-                    f"<h3 style='text-align: center; font-size: 25px;'>Amount of Exposure(in Rupees)</h3>",
-                    unsafe_allow_html=True
+            filtered_df["Verified on"] = pd.to_datetime(
+                filtered_df["Verified on"], format="%Y/%m/%d", errors="coerce"
+            )
+            dfholiday["date"] = pd.to_datetime(
+                dfholiday["date"], format="%Y/%m/%d", errors="coerce"
+            )
+            filtered_df = filtered_df[
+                filtered_df["Posting Date"].isin(dfholiday["date"])
+            ]
+            filtered_df["Invoice Number"] = filtered_df["Invoice Number"].astype(
+                str)
+            filtered_df = find_similar_invoice_numbers(filtered_df, threshold=0.7)
+            checked_columnsspec = [
+                (
+                    "Posting Date"
+                    if col == "Holiday Transactions"
+                    else (
+                        "Invoice Number"
+                        if col in ("Inv-Special Character", "80 % Same Invoice")
+                        else col
+                    )
                 )
-                st.markdown(
-                    f"<div style='{card1_style}'>"
-                    f"<h2 style='color: #007bff; text-align: center; font-size: 35px;'>{amount_display}</h2>"
-                    "</div>",
-                    unsafe_allow_html=True
-                )
-                st.write("")
-
-        with card2:
-            Total_Transaction = len(dfe)
-            st.markdown(
-                f"<h3 style='text-align: center; font-size: 25px;'> Count Of Transactions</h3>",
-                unsafe_allow_html=True
+                for col in checked_columnsspec
+            ]
+        else:
+            filtered_df["Document Date"] = pd.to_datetime(
+                filtered_df["Document Date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.markdown(
-                f"<div style='{card2_style}'>"
-                f"<h2 style='color: #28a745; text-align: center;'>{Total_Transaction:,}</h2>"
-                "</div>",
-                unsafe_allow_html=True
+            filtered_df["Posting Date"] = pd.to_datetime(
+                filtered_df["Posting Date"], format="%Y/%m/%d", errors="coerce"
             )
-            st.write("")
-        c11, c22, c33 = st.columns([1, 8, 1])
+            filtered_df["Verified on"] = pd.to_datetime(
+                filtered_df["Verified on"], format="%Y/%m/%d", errors="coerce"
+            )
+            dfholiday["date"] = pd.to_datetime(
+                dfholiday["date"], format="%Y/%m/%d", errors="coerce"
+            )
+            filtered_df = filtered_df[
+                filtered_df["Posting Date"].isin(dfholiday["date"])
+            ]
+            filtered_df = filtered_df.sort_values(
+                by=["Invoice Number", "Posting Date"])
 
-        # Display the DataFrame
-        # dfe['Amount'] = dfe['Amount'].round()
-        dfe = dfe.drop(columns=['year'])
-        dfe = dfe.sort_values(by=['Pstng Date', "Cost Center", 'Name'])
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        dfee = dfe.copy()
-        dfee['Amount'] = dfee['Amount'].round()
-        c22.write(dfee[
-                      ['Payable req.no', 'Doc.Type', 'ID', 'Name', 'Invoice Number', 'Text', "Cost Center",
-                       'G/L', 'Document No',
-                       'Doc. Date', 'Pstng Date', 'Amount', 'Created by', 'Verified by', 'HOG Approval by']])
-        dfe = dfe[['Payable req.no', 'Doc.Type', 'ID', 'Name', 'category', 'Invoice Number',
-                   'Reference invoice', 'Text', 'Document No',
-                   'Doc. Date', 'Pstng Date', "Cost Center", 'CostctrName', 'G/L', 'G/L Name',
-                   'Profit Ctr', 'GR/IC Reference', 'Org.unit', 'Status', 'File 1', 'File 2', 'File 3',
-                   'Created by', 'Time', 'Updated at', 'Reason for Rejection', 'Verified by', 'Verified at',
-                   'Reference document', 'Reference invoice', 'Adv.doc year',
-                   'Request no (Advance mulitple selection)', 'Invoice Reference Number',
-                   'HOG Approval by', 'HOG Approval at', 'HOG Approval Req', 'Requested HOG ID',
-                   'Month', 'Vesselcode', 'PEA Number', 'Status of Request', 'Clearing doc no.',
-                   'Amount', 'On', 'Updated on', 'Verified on',
-                   'HOG Approval on', 'Clearing date']]
-        dfe.reset_index(drop=True, inplace=True)
-        dfe.index += 1  # Start index from 1
-        excel_buffer = BytesIO()
-        dfe.to_excel(excel_buffer, index=False)
-        excel_buffer.seek(0)  # Reset the buffer's position to the start for reading
-        # Convert Excel buffer to base64
-        excel_b64 = base64.b64encode(excel_buffer.getvalue()).decode()
-        # Download link for Excel file within a Markdown
-        download_link = f'<a href="data:file/xls;base64,{excel_b64}" download="Created_verified on Holidays.xlsx">Download Excel file</a>'
-        st.markdown(download_link, unsafe_allow_html=True)
+            # Find similar invoices without grouping
+            # Find similar invoices without grouping
+            grouped = filtered_df.groupby('Reimbursement ID')
+            similar_invoices = set()
 
+            for name, group in grouped:
+                if len(group) > 1:  # Apply logic only if group size is greater than one
+
+                    filtered_df = filtered_df[~filtered_df.duplicated(subset='Invoice Number', keep=False)]
+                    # Create a list of tuples with original and cleaned invoice numbers
+                    invoice_pairs = [(invoice, re.sub(r'[^A-Za-z0-9]+', '', str(invoice))) for invoice in
+                                     group['Invoice Number']]
+                    # Find all unique pairs where invoices are similar within the group
+                    for i, (inv1, clean_inv1) in enumerate(invoice_pairs):
+                        for inv2, clean_inv2 in invoice_pairs[i + 1:]:
+                            if is_similar(clean_inv1, clean_inv2):
+                                similar_invoices.add(inv1)
+                                similar_invoices.add(inv2)
+            filtered_df["Invoice Number"] = filtered_df["Invoice Number"].astype(
+                str)
+            filtered_df = find_similar_invoice_numbers(filtered_df, threshold=0.7)
+    elif "80 % Same Invoice" in checked_columnsspec:
+        if len(checked_columnsspec) == 1:
+            filtered_df["Invoice Number"] = filtered_df["Invoice Number"].astype(
+                str)
+            filtered_df = find_similar_invoice_numbers(filtered_df, threshold=0.7)
+        else:
+            filtered_df = filtered_df.sort_values(
+                by=["Invoice Number", "Posting Date"])
+
+            # Find similar invoices without grouping
+            # Find similar invoices without grouping
+            filtered_df = identify_and_return_all_duplicates(filtered_df)
+            filtered_df = find_similar_invoice_numbers(filtered_df, threshold=0.7)
+    elif "Inv-Special Character" in checked_columnsspec:
+        if len(checked_columnsspec) == 1:
+            grouped = filtered_df.groupby('Reimbursement ID')
+            similar_invoices = set()
+
+            for name, group in grouped:
+                if len(group) > 1:  # Apply logic only if group size is greater than one
+                    filtered_df = filtered_df[~filtered_df.duplicated(subset='Invoice Number', keep=False)]
+                    # Create a list of tuples with original and cleaned invoice numbers
+                    invoice_pairs = [(invoice, re.sub(r'[^A-Za-z0-9]+', '', str(invoice))) for invoice in
+                                     group['Invoice Number']]
+                    # Find all unique pairs where invoices are similar within the group
+                    for i, (inv1, clean_inv1) in enumerate(invoice_pairs):
+                        for inv2, clean_inv2 in invoice_pairs[i + 1:]:
+                            if is_similar(clean_inv1, clean_inv2):
+                                similar_invoices.add(inv1)
+                                similar_invoices.add(inv2)
+    checked_columnsspec = [
+        (
+            "Posting Date"
+            if col == "Holiday Transactions"
+            else (
+                "Invoice Number"
+                if col in ("Inv-Special Character", "80 % Same Invoice")
+                else col
+            )
+        )
+        for col in checked_columnsspec
+    ]
+    sort_columns = checked_columnsspec.copy()
+    # if (
+    #     "Reimbursement ID" not in checked_columnsspec
+    #     and "Cost Center" not in checked_columnsspec
+    # ):
+    #     sort_columns += ["Reimbursement ID", "Cost Center"]
+    # elif (
+    #     "Reimbursement ID" in checked_columnsspec
+    #     and "Cost Center" not in checked_columnsspec
+    # ):
+    #     sort_columns += ["Cost Center"]
+    # elif (
+    #     "Cost Center" in checked_columnsspec
+    #     and "Reimbursement ID" not in checked_columnsspec
+    # ):
+    #     sort_columns += ["Reimbursement ID"]
+    filtered_df = filtered_df.sort_values(by=sort_columns)
+    filtered_df.reset_index(drop=True, inplace=True)
+    filtered_df.index += 1
+    try:
+        return filtered_df, checked_columnsspec, dfholiday, filename
+
+    except pd.errors.EmptyDataError as e:
+        st.error(f"An error occurred: {e}")
+        return None, None, None, None
